@@ -1,7 +1,7 @@
 data
-!data/
+data/
 data/*
-!data/calendar/
+data/calendar/
 data/calendar/*
-!data/calendar/nse_holidays.csv
+data/calendar/nse_holidays.csv
 El plan.md
