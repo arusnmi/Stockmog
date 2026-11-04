@@ -7,12 +7,10 @@ DATA_DIR = ROOT_DIR / "data"
 RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 FEATURES_DIR = DATA_DIR / "features"
-DB_DIR = ROOT_DIR / "database"
-DB_PATH = DB_DIR / "trading.db"
 
 
 def ensure_project_structure() -> None:
-    for directory in (DATA_DIR, RAW_DIR, PROCESSED_DIR, FEATURES_DIR, DB_DIR):
+    for directory in (DATA_DIR, RAW_DIR, PROCESSED_DIR, FEATURES_DIR):
         directory.mkdir(parents=True, exist_ok=True)
 
     for child in ("intraday", "daily", "indices"):

@@ -13,7 +13,10 @@ def scan_training_csv(file_path: str | Path) -> pl.LazyFrame:
     path = Path(file_path)
     if not path.is_file():
         raise FileNotFoundError(f"Training CSV not found: {path}")
-    if path.suffix.lower() != ".csv":
+    if not (
+        path.suffix.lower() == ".csv"
+        or path.name.lower().endswith(".csv.gz")
+    ):
         raise ValueError(f"Training data must be a CSV file: {path}")
 
     frame = pl.scan_csv(
