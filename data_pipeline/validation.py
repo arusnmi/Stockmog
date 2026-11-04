@@ -92,6 +92,8 @@ def validate_ohlcv(rows: list[dict[str, Any]], interval: str = "1d") -> dict[str
     missing_count = 0
     expected_delta = _interval_to_timedelta(interval)
     for previous, current in zip(timestamps, timestamps[1:]):
+        if expected_delta < timedelta(days=1) and current.date() != previous.date():
+            continue
         delta = current - previous
         if delta > expected_delta:
             gaps = int(delta.total_seconds() // expected_delta.total_seconds()) - 1
