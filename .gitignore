@@ -5,3 +5,4 @@ data/calendar/
 data/calendar/*
 data/calendar/nse_holidays.csv
 El plan.md
+data/raw/INFY/INFY_5m.json
