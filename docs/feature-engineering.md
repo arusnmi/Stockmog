@@ -30,9 +30,11 @@ return as context. Context joins use only strictly earlier timestamps.
 
 ## Feature set
 
-- Candle returns, gap percentage, body, wicks, and range.
+- Candle returns (1/5/20 bars), gap percentage, close location, body, wicks, and
+  range.
 - EMA 9/20/50/200, RSI 7/14, MACD and signal/histogram.
-- ATR 14 and ATR percentage, Bollinger Bands/width/%B, and ADX 14.
+- ATR 14 and ATR percentage, Bollinger Bands/width/%B, ADX 14 and directional
+  indicators, stochastic %K/%D, and OBV with its 20-bar average.
 - Prior-bar box high/low, width relative to ATR, and breakout distances.
 - Relative volume using a prior-bars-only baseline.
 - Intraday session VWAP and opening range, published only once the opening
@@ -73,7 +75,7 @@ training_window = features.filter(
 The `prepare-stock-data` command downloads the Parquet shards from
 `Saintforest/indian-stock-market-minute-data`, processes one stock at a time,
 and writes compressed CSVs under `data\stocks`. It does not use a SQL database.
-The minute split creates `5m`, `15m`, `30m`, `1h`, and `1d` candles. Both the
+The minute split creates `1m`, `5m`, `15m`, `20m`, `30m`, `1h`, and `1d` candles. Both the
 minute and daily splits also create `2d` candles (each combines two consecutive
 NSE trading sessions) and `trading_week` candles. A trading week is labelled
 with its Monday date and includes the actual observed sessions only; the
@@ -113,6 +115,12 @@ Install dependencies and prepare a small symbol subset first:
 python -m pip install -r requirements.txt
 python main.py prepare-stock-data --split minute --symbols RELIANCE,TCS,INFY
 ```
+
+The minute split creates both `1m.csv.gz` and `20m.csv.gz` for each selected
+symbol. Once generated, either file can be passed independently to
+`train-models` or `backtest`; see [machine-learning.md](./machine-learning.md)
+and [backtesting.md](./backtesting.md). The historical model-training command
+is separate and is not run by data preparation.
 
 To prepare both the minute and daily datasets for every symbol, run:
 

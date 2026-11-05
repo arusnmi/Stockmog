@@ -1,3 +1,5 @@
+from contextlib import redirect_stdout
+from io import StringIO
 import tempfile
 import unittest
 from datetime import date, datetime, timedelta
@@ -10,6 +12,7 @@ import polars as pl
 from data_pipeline.csv_dataset import scan_training_csv
 from data_pipeline.huggingface_stocks import (
     _process_parquet_shard,
+    _prepare_stock_frame,
     _scan_minute_date_range,
     add_stock_indicators,
     load_nse_holidays,
@@ -49,11 +52,15 @@ class HuggingFaceStockDataTests(unittest.TestCase):
     def test_intraday_resampling_uses_ist_session_buckets_and_volume(self):
         source = _minute_frame(rows=65)
 
+        one_minute = resample_intraday(source, minutes=1, symbol="TEST")
         five_minute = resample_intraday(source, minutes=5, symbol="TEST")
         fifteen_minute = resample_intraday(source, minutes=15, symbol="TEST")
+        twenty_minute = resample_intraday(source, minutes=20, symbol="TEST")
         thirty_minute = resample_intraday(source, minutes=30, symbol="TEST")
         hourly = resample_intraday(source, minutes=60, symbol="TEST")
 
+        self.assertEqual(one_minute.height, 65)
+        self.assertEqual(one_minute["source_bars"][0], 1)
         self.assertEqual(five_minute.height, 13)
         self.assertEqual(five_minute["timestamp"][0].hour, 9)
         self.assertEqual(five_minute["timestamp"][0].minute, 15)
@@ -64,6 +71,10 @@ class HuggingFaceStockDataTests(unittest.TestCase):
         self.assertEqual(fifteen_minute.height, 5)
         self.assertFalse(fifteen_minute["is_partial"][0])
         self.assertTrue(fifteen_minute["is_partial"][-1])
+
+        self.assertEqual(twenty_minute.height, 4)
+        self.assertEqual(twenty_minute["source_bars"].to_list(), [20, 20, 20, 5])
+        self.assertTrue(twenty_minute["is_partial"][-1])
 
         self.assertEqual(thirty_minute.height, 3)
         self.assertTrue(thirty_minute["is_partial"][-1])
@@ -167,7 +178,7 @@ class HuggingFaceStockDataTests(unittest.TestCase):
                 split="minute",
                 output_root=temporary_directory,
             )
-            self.assertEqual(len(paths), 7)
+            self.assertEqual(len(paths), 9)
             self.assertTrue(all(path.name.endswith(".csv.gz") for path in paths))
             scanned = scan_training_csv(paths[0]).collect()
             self.assertGreater(scanned.height, 0)
@@ -179,6 +190,21 @@ class HuggingFaceStockDataTests(unittest.TestCase):
             self.assertTrue(
                 (Path(temporary_directory) / "minute" / "TEST" / "trading_week.csv.gz").is_file()
             )
+
+    def test_invalid_ohlc_rows_are_dropped_with_a_warning(self):
+        source = _minute_frame(rows=3).with_row_index("_row").with_columns(
+            pl.when(pl.col("_row") == 0)
+            .then(pl.col("open") + 0.01)
+            .otherwise(pl.col("low"))
+            .alias("low")
+        ).drop("_row")
+
+        warning = StringIO()
+        with redirect_stdout(warning):
+            cleaned = _prepare_stock_frame(source)
+
+        self.assertEqual(cleaned.height, 2)
+        self.assertIn("dropped 1 invalid OHLC row(s) for TEST", warning.getvalue())
 
     def test_parquet_shard_streams_symbols_across_batch_boundaries(self):
         timestamps = pl.datetime_range(
@@ -212,7 +238,7 @@ class HuggingFaceStockDataTests(unittest.TestCase):
             pq.write_table(table, parquet_path, row_group_size=4)
             seen_symbols = set()
 
-            processed, source_rows, minute_start, minute_end = _process_parquet_shard(
+            processed, source_rows, minute_start, minute_end, pending = _process_parquet_shard(
                 parquet_path,
                 split="minute",
                 output_root=output_root,
@@ -226,12 +252,56 @@ class HuggingFaceStockDataTests(unittest.TestCase):
             self.assertEqual(source_rows, 10)
             self.assertEqual(minute_start, date(2024, 1, 2))
             self.assertEqual(minute_end, date(2024, 1, 2))
+            self.assertIsNone(pending)
             self.assertEqual(seen_symbols, {"TEST", "OTHER"})
-            self.assertEqual(len(list(output_root.rglob("*.csv.gz"))), 14)
+            self.assertEqual(len(list(output_root.rglob("*.csv.gz"))), 18)
             self.assertEqual(
                 _scan_minute_date_range(parquet_path, batch_size=3),
                 (date(2024, 1, 2), date(2024, 1, 2)),
             )
+
+    def test_parquet_shard_boundary_merges_continuous_symbol_rows(self):
+        table = _minute_frame(rows=10).to_arrow()
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            first_shard = Path(temporary_directory) / "first.parquet"
+            second_shard = Path(temporary_directory) / "second.parquet"
+            output_root = Path(temporary_directory) / "output"
+            pq.write_table(table.slice(0, 5), first_shard, row_group_size=3)
+            pq.write_table(table.slice(5, 5), second_shard, row_group_size=3)
+            seen_symbols = set()
+
+            first_result = _process_parquet_shard(
+                first_shard,
+                split="minute",
+                output_root=output_root,
+                selected_symbols={"TEST"},
+                seen_symbols=seen_symbols,
+                batch_size=3,
+                holidays=set(),
+                defer_last_symbol=True,
+            )
+            processed, source_rows, _, _, pending = _process_parquet_shard(
+                second_shard,
+                split="minute",
+                output_root=output_root,
+                selected_symbols={"TEST"},
+                seen_symbols=seen_symbols,
+                batch_size=3,
+                holidays=set(),
+                pending_symbol=first_result[4],
+            )
+
+            self.assertEqual(first_result[:2], (0, 0))
+            self.assertEqual(processed, 1)
+            self.assertEqual(source_rows, 10)
+            self.assertIsNone(pending)
+            self.assertEqual(seen_symbols, {"TEST"})
+            five_minute = scan_training_csv(
+                output_root / "minute" / "TEST" / "5m.csv.gz"
+            ).collect()
+            self.assertEqual(five_minute.height, 2)
+            self.assertEqual(five_minute["source_bars"].to_list(), [5, 5])
 
     def test_daily_output_is_clipped_to_dataset_wide_minute_date_range(self):
         daily = pl.DataFrame(
@@ -290,6 +360,26 @@ class HuggingFaceStockDataTests(unittest.TestCase):
             calendar_path.write_text("date,name\nnot-a-date,Holiday\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "line 2"):
                 load_nse_holidays(calendar_path)
+
+    def test_parquet_file_is_unlocked_after_schema_error(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            parquet_path = Path(temporary_directory) / "missing_symbol.parquet"
+            pq.write_table(
+                pa.table({"value": [1]}),
+                parquet_path,
+            )
+            with self.assertRaisesRegex(ValueError, "no symbol column"):
+                _process_parquet_shard(
+                    parquet_path,
+                    split="minute",
+                    output_root=Path(temporary_directory) / "output",
+                    selected_symbols=None,
+                    seen_symbols=set(),
+                    batch_size=10,
+                    holidays=set(),
+                )
+            parquet_path.unlink()
+            self.assertFalse(parquet_path.exists())
 
 
 if __name__ == "__main__":

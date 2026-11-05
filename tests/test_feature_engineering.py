@@ -81,6 +81,20 @@ class FeatureEngineeringTests(unittest.TestCase):
             self.assertIn("atr_14", frame.columns)
             self.assertIn("bb_pct_b", frame.columns)
             self.assertIn("adx_14", frame.columns)
+            for column in (
+                "ret_5",
+                "ret_20",
+                "close_location",
+                "stoch_k_14",
+                "stoch_d_3",
+                "obv",
+                "obv_sma_20",
+                "plus_di_14",
+                "minus_di_14",
+            ):
+                self.assertIn(column, frame.columns)
+            self.assertTrue(all(value is None for value in frame["ret_5"][:5]))
+            self.assertIsNotNone(frame["obv"][1])
 
             self.assertIsNone(frame["box_high"][0])
             self.assertEqual(frame["box_high"][2], 103.0)

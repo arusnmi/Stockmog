@@ -1,0 +1,201 @@
+﻿id,name,entry_hypothesis,timeframes,features,family,references,exit_template
+001,Multiweek winner continuation,Buy strongest prior multiweek return among peers; exit when relative rank deteriorates,S,"rN, cross-sectional ranks",momentum,"S1,S10",E2
+002,Time-series positive trend,Go long when own trailing return is positive; reverse/flat when negative,S,rN,momentum,S2,E2
+003,Moving-average state cross,Enter long when fast average crosses above slow; exit on reverse cross,IS,SMA/EMA,trend,"S3,S12",E2
+004,Price-over-average persistence,Enter when close reclaims a rising long average; exit on close below it,IS,"C,SMA slope",trend,"S3,S12",E2
+005,Dual-average alignment,Enter long when price and fast average are both above slow average; exit on loss of alignment,IS,"C,EMA",trend,"S3,S12",E2
+006,Average-slope acceleration,Enter when a rising average’s slope increases; exit when slope turns down,IS,EMA slope,trend,"S3,S12",E2
+007,Trend-strength gated crossover,Take bullish average cross only when ADX is rising; exit on bearish cross or weakening trend,IS,"EMA,ADX",trend filter,"S3,S12",E2
+008,RSI trend-regime continuation,"In an established uptrend, buy RSI recovery from a midrange pullback; exit on trend failure",IS,"EMA,RSI",trend pullback,"S1,S12",E2
+009,MACD zero-line continuation,Enter long on MACD bullish cross above zero; exit on bearish cross or price invalidation,IS,EMA-derived MACD,trend,"S3,S12",E2
+010,MACD signal-line continuation,"In positive MACD regime, enter on signal-line recross upward; exit on downward recross",IS,MACD,trend pullback,"S3,S12",E2
+011,Directional-index dominance,Enter long when +DI overtakes -DI with rising ADX; exit on DI reversal,IS,"ADX,+DI,-DI",trend,S12,E2
+012,Channel trend ride,Enter when price is above the midpoint of a rising price channel; exit below channel support,IS,regression/channel,trend,"S3,S4",E2
+013,Higher-high higher-low sequence,Enter after a confirmed higher high and higher low; exit on lower low,IS,swing pivots,structure trend,"S4,S10",E1
+014,Three-bar trend persistence,Enter after three consecutive closes in trend direction with higher/lower closes; exit on reversal close,IS,"C,rN",trend,"S2,S10",E2
+015,Trend pullback to fast average,"Buy first pullback touching a rising fast average, then closing back above; exit below swing low",IS,"EMA,swing low",trend pullback,"S1,S12",E1
+016,Trend pullback to slow average,Buy pullback to rising slow average after trend confirmation; exit on close below it,IS,EMA,trend pullback,"S1,S12",E1
+017,Prior-high continuation retest,Buy return to prior breakout high that holds as support; exit on failed retest,IS,"HH,close",trend retest,"S4,S11",E1
+018,52-week high proximity,Enter long as price approaches its trailing 52-week high from below; exit on loss of trend or failed breakout,S,"52-week HH,ROC",momentum,S11,E2
+019,Relative-strength leadership,Buy the asset with improving return relative to a benchmark; exit when relative strength rolls over,S,asset/benchmark closes,relative momentum,S1,E2
+020,Momentum with delayed reversal filter,"Enter on positive medium-term return, excluding most recent short-term reversal window; exit on trend breakdown",S,rN,momentum,"S1,S6",E2
+021,Prior-range high breakout,Buy close above prior rolling high; exit back inside range or at risk stop,IS,HH,breakout,"S3,S4",E1
+022,Prior-range low breakdown,Short/avoid long on close below prior rolling low; exit on reclaim or stop,IS,LL,breakdown,"S3,S4",E1
+023,Donchian close breakout,Enter on close beyond N-bar channel; exit on opposite channel breach,IS,"HH,LL",breakout,"S3,S12",E2
+024,Intrabar high trigger,Enter when price trades through prior N-bar high; exit on failed breakout or trailing stop,IS,"HH,H",breakout,"S4,S12",E1
+025,Opening-range upside break,"After session opening range forms, enter on break above its high; exit on range failure or session end",I,session H/L,intraday breakout,"S8,S12",E3
+026,Opening-range downside break,Enter short on break below opening-range low; cover on reclaim or session end,I,session H/L,intraday breakdown,"S8,S12",E3
+027,Inside-bar expansion,"After a bar contained within prior bar, enter on its high/low break; exit on opposite-side failure",IS,H/L,compression breakout,"S4,S12",E1
+028,NR-bar expansion,"After narrowest recent true-range bar, enter on range break; exit on failed break or trailing stop",IS,"TR, rolling minimum",compression breakout,"S12,S15",E1
+029,Multi-day consolidation break,Enter on close beyond a multi-session narrow range; exit back into range,S,"HH,LL,ATR",breakout,"S4,S10",E1
+030,Volatility contraction breakout,Enter in direction of close breaking a low-bandwidth consolidation; exit on band re-entry,IS,"BB bandwidth,HH,LL",breakout,"S4,S12",E1
+031,Range expansion close,Enter with a close whose range exceeds recent typical range and closes near its extreme; exit on reversal,IS,"TR,CLV",range expansion,"S4,S12",E2
+032,Gap-and-go continuation,"When opening gap aligns with trend and price holds beyond prior close, enter with gap direction; exit on gap failure",I,"gap,EMA",gap breakout,"S8,S12",E3
+033,Volume-confirmed high breakout,Enter on range-high close with unusually high volume; exit on close back below breakout level,IS,"HH,VolZ",breakout/volume,"S4,S5",E1
+034,Low-volume breakout retest,"After breakout, enter only on a low-volume retest that holds; exit below retest level",IS,"HH,VolZ",breakout/retest,"S4,S5",E1
+035,Two-close breakout confirmation,Enter only after two consecutive closes above range high; exit on close back inside,IS,"HH,C",breakout confirmation,"S4,S10",E1
+036,Breakout close-location filter,Enter breakout only if close lies near bar high; exit on close below trigger,IS,"HH,CLV",breakout confirmation,"S4,S12",E1
+037,Breakout from rising-base structure,Buy break above a base whose lows rise; exit below base support,IS,"swing pivots,HH",structure breakout,"S4,S10",E1
+038,Breakout after volatility squeeze,Enter on directional close after BB width contracts; exit if width expands without price follow-through,IS,"BB width,ROC",volatility breakout,"S12,S15",E2
+039,Weekly level breakout,Enter on weekly close beyond prior weekly high; exit on weekly close back inside,S,weekly HH,breakout,"S3,S4",E2
+040,Failed breakout reversal,Fade a break above range that closes back inside; exit at range midpoint/opposite boundary or stop,IS,"HH,CLV",failed breakout,"S4,S10",E4
+041,Short-horizon down-move rebound,Buy after an unusually negative short return; exit at short-term mean or time stop,I,rN,mean reversion,"S6,S10",E4
+042,Short-horizon up-move fade,Short after unusually positive short return; cover at mean or time stop,I,rN,mean reversion,"S6,S10",E4
+043,RSI oversold recovery,Buy RSI below a low threshold once it turns upward; exit near neutral/overbought or stop,IS,RSI,oscillator reversal,"S6,S12",E4
+044,RSI overbought rollover,Short RSI above a high threshold once it turns down; cover near neutral or stop,IS,RSI,oscillator reversal,"S6,S12",E4
+045,Stochastic oversold cross,Buy bullish %K/%D cross from oversold zone; exit on opposite cross or mean target,IS,Stoch,oscillator reversal,S12,E4
+046,Stochastic overbought cross,Short bearish %K/%D cross from overbought zone; cover on opposite cross,IS,Stoch,oscillator reversal,S12,E4
+047,Lower-band rejection,Buy after price pierces lower BB then closes back inside; exit at middle band or stop,IS,"BB,C",band reversion,S12,E4
+048,Upper-band rejection,Short after price pierces upper BB then closes back inside; cover at middle band or stop,IS,"BB,C",band reversion,S12,E4
+049,Oversold close-location reversal,Buy a low-close-location bar followed by close above its high; exit below reversal low,IS,"CLV,H,L",bar reversal,"S4,S12",E1
+050,Overbought close-location reversal,Short a high-close-location bar followed by close below its low; exit above reversal high,IS,"CLV,H,L",bar reversal,"S4,S12",E1
+051,Two-bar downside exhaustion,Buy after large down bar followed by smaller-range bar and bullish close; exit below exhaustion low,IS,"TR,C",exhaustion reversal,"S4,S10",E1
+052,Two-bar upside exhaustion,Short after large up bar followed by smaller-range bar and bearish close; exit above exhaustion high,IS,"TR,C",exhaustion reversal,"S4,S10",E1
+053,Climax-range snapback,Fade an exceptionally large true-range bar when next bar reverses through its midpoint; exit at prior close/stop,IS,"ATR,TR",exhaustion reversal,"S4,S15",E4
+054,Long-lower-wick reversal,Buy lower-wick-dominant bar at support after subsequent high break; exit below wick low,IS,"O,H,L,C",candlestick reversal,"S9,S12",E1
+055,Long-upper-wick reversal,Short upper-wick-dominant bar at resistance after subsequent low break; exit above wick high,IS,"O,H,L,C",candlestick reversal,"S9,S12",E1
+056,RSI bullish divergence,"Buy when price makes lower swing low while RSI makes higher low, after price confirmation; exit on new low",IS,"swing pivots,RSI",divergence,"S4,S12",E1
+057,RSI bearish divergence,"Short when price makes higher swing high but RSI lower high, after confirmation; exit on new high",IS,"swing pivots,RSI",divergence,"S4,S12",E1
+058,ROC divergence reversal,Trade confirmed price/ROC swing divergence; exit if price extends beyond divergence pivot,IS,"ROC,pivots",divergence,"S4,S12",E1
+059,Failed support breakdown,Buy when price breaks support intrabar but closes back above; exit below support,IS,"LL,C",false-break reversal,"S4,S10",E1
+060,Failed resistance breakout,Short when price breaks resistance intrabar but closes back below; exit above resistance,IS,"HH,C",false-break reversal,"S4,S10",E1
+061,Bullish engulfing confirmation,"After decline, buy bullish body engulfing prior body when next high breaks; exit below pattern low",IS,"O,C,H,L",candlestick,S9,E1
+062,Bearish engulfing confirmation,"After advance, short bearish body engulfing prior body when next low breaks; exit above pattern high",IS,"O,C,H,L",candlestick,S9,E1
+063,Morning-star sequence,Buy three-bar downtrend-base-recovery pattern after recovery confirmation; exit below pattern low,IS,"O,H,L,C",candlestick,S9,E1
+064,Evening-star sequence,Short three-bar advance-pause-decline pattern after decline confirmation; exit above pattern high,IS,"O,H,L,C",candlestick,S9,E1
+065,Piercing-line recovery,"After decline, buy second candle opening below prior low and closing into prior bearish body; exit below low",IS,"O,C,L",candlestick,S9,E1
+066,Dark-cloud reversal,"After advance, short second candle opening above prior high and closing deeply into prior bullish body; exit above high",IS,"O,C,H",candlestick,S9,E1
+067,Bullish harami break,"Buy after small real body contained in prior bearish body, confirmed by high break; exit below pattern low",IS,"O,C,H,L",candlestick,S9,E1
+068,Bearish harami break,"Short after small real body contained in prior bullish body, confirmed by low break; exit above pattern high",IS,"O,C,H,L",candlestick,S9,E1
+069,Hammer at rolling low,Buy hammer-like candle near rolling low only on high break; exit below wick low,IS,"O,H,L,C,LL",candlestick,"S9,S12",E1
+070,Shooting star at rolling high,Short star-like candle near rolling high only on low break; exit above wick high,IS,"O,H,L,C,HH",candlestick,"S9,S12",E1
+071,Bullish doji breakout,"After decline, buy doji-range high break; exit below doji low",IS,"O,H,L,C",candlestick,S9,E1
+072,Bearish doji breakdown,"After advance, short doji-range low break; exit above doji high",IS,"O,H,L,C",candlestick,S9,E1
+073,Three white advances,Buy three consecutive strong bullish closes with limited upper wicks; exit on reversal bar/stop,IS,"O,H,L,C",candlestick continuation,S9,E2
+074,Three black declines,Short three consecutive strong bearish closes with limited lower wicks; cover on reversal/stop,IS,"O,H,L,C",candlestick continuation,S9,E2
+075,Rising three-bar continuation,"Buy pause bars contained within prior bullish impulse, then impulse-high break; exit below pause low",IS,"O,H,L,C",candlestick continuation,S9,E1
+076,Falling three-bar continuation,"Short pause bars contained within prior bearish impulse, then impulse-low break; exit above pause high",IS,"O,H,L,C",candlestick continuation,S9,E1
+077,Tweezer-bottom break,Buy after matching swing lows and bullish confirmation above intervening high; exit below matched lows,IS,"L,C,pivots",candlestick reversal,S9,E1
+078,Tweezer-top breakdown,Short after matching swing highs and bearish confirmation below intervening low; exit above matched highs,IS,"H,C,pivots",candlestick reversal,S9,E1
+079,Inside-day bullish resolution,"After inside day near support, buy break above mother-bar high; exit below mother-bar low",S,daily H/L,candlestick/range,"S9,S12",E1
+080,Inside-day bearish resolution,"After inside day near resistance, short break below mother-bar low; exit above mother-bar high",S,daily H/L,candlestick/range,"S9,S12",E1
+081,ATR expansion trend entry,Enter in direction of close when true range expands above recent baseline; exit on ATR stop/opposite signal,IS,"ATR,TR",volatility expansion,"S12,S15",E2
+082,ATR contraction breakout,"After falling ATR, enter on close beyond recent range; exit on failed breakout",IS,"ATR,HH,LL",volatility compression,"S12,S15",E1
+083,Bollinger bandwidth release,Enter with direction of close as BB bandwidth rises from low percentile; exit on trend reversal,IS,"BB width,C",volatility expansion,S12,E2
+084,Bollinger band-walk continuation,Stay long while closes repeatedly ride upper band with rising basis; exit on basis failure,IS,"BB,C",trend/volatility,S12,E2
+085,Lower-band squeeze release,Buy first close above middle band after lower-band compression and positive return; exit below basis,IS,"BB,ROC",volatility reversion-to-trend,S12,E2
+086,Upper-band squeeze release,Short first close below middle band after upper-band compression and negative return; exit above basis,IS,"BB,ROC",volatility reversion-to-trend,S12,E2
+087,Range-to-trend transition,Enter breakout after consecutive declining daily ranges followed by directional expansion; exit on range re-entry,S,"TR,HH,LL",regime transition,"S4,S15",E2
+088,Volatility-scaled trend,Use fixed return threshold in ATR units; trade sign of excess move and exit on opposite threshold,IS,"rN,ATR",trend/volatility sizing,"S2,S15",E2
+089,Volatility-scaled mean reversion,Fade return beyond a multiple of ATR from rolling mean; exit at mean or stop,IS,"ATR,mean,rN",mean reversion,"S6,S15",E4
+090,True-range gap expansion,Enter gap direction only if first bar’s true range expands beyond prior ATR; exit on gap retrace,I,"gap,TR,ATR",gap/volatility,"S8,S15",E3
+091,Range percentile breakout,Enter on range break when recent range percentile is unusually low; exit on re-entry,IS,"TR percentile,HH,LL",compression breakout,"S4,S15",E1
+092,Volatility shock fade,"After extreme range shock, fade if following close returns inside shock bar; exit at midpoint/stop",IS,"TR,ATR",volatility reversal,S15,E4
+093,Volatility shock continuation,"After extreme-range bar closing near extreme, enter same direction on next-bar confirmation; exit on reversal",IS,"TR,CLV",volatility continuation,"S2,S15",E2
+094,Alternating-range contraction,Enter break from sequence of shrinking highs/lows and ranges; exit inside pattern,IS,"H,L,TR",compression breakout,"S4,S15",E1
+095,Widening-range reversal,"At expanding swing extremes, trade reversal only after a close back within prior bar; exit beyond extreme",IS,"H,L,TR",volatility structure,"S4,S15",E1
+096,Keltner-channel close breakout,Enter on close beyond ATR-based channel; exit on channel re-entry or trailing stop,IS,"EMA,ATR",channel breakout,"S12,S15",E2
+097,Keltner-channel mean touch,"In flat regime, fade excursion beyond channel back toward basis; exit at basis/stop",IS,"EMA,ATR,ADX",channel reversion,"S12,S15",E4
+098,ATR chandelier trend exit,Enter on trend filter; remain until close crosses ATR chandelier stop,IS,"HH/LL,ATR,EMA",trend/volatility stop,"S2,S15",E2
+099,Normalized-range impulse,Enter when close-to-close movement is large relative to true range and aligned with trend; exit on normalization failure,IS,"rN,TR,EMA",momentum/volatility,"S2,S15",E2
+100,High-low volatility regime filter,Trade momentum only when range-based volatility regime rises from low state; exit when trend fails,S,"H,L,Parkinson proxy",regime filter,"S2,S15",E2
+101,Volume surge breakout,Buy price breakout with volume materially above rolling baseline; exit if price returns into base,IS,"VolZ,HH",volume-confirmed breakout,S5,E1
+102,Volume surge breakdown,Short support break with volume surge; cover on support reclaim,IS,"VolZ,LL",volume-confirmed breakdown,S5,E1
+103,OBV trend confirmation,Take price breakout only when OBV also breaks its prior high; exit if OBV/price trend breaks,IS,"OBV,HH",volume confirmation,"S5,S12",E2
+104,OBV bullish divergence,Buy price lower low with OBV higher low after price confirmation; exit below price pivot,IS,"OBV,pivots",volume divergence,"S5,S12",E1
+105,OBV bearish divergence,Short price higher high with OBV lower high after confirmation; exit above pivot,IS,"OBV,pivots",volume divergence,"S5,S12",E1
+106,Accumulation-day sequence,"Enter long after multiple up-close, high-volume sessions exceed down-volume sessions; exit on sequence reversal",S,"C,V,VolZ",volume accumulation,S5,E2
+107,Distribution-day sequence,"Short/avoid long after repeated down-close, high-volume sessions; exit when selling pressure subsides",S,"C,V,VolZ",volume distribution,S5,E2
+108,High-volume close-near-high,Buy high-volume bar that closes near its high after base; exit below bar low,IS,"V,CLV,H",volume/price pressure,S5,E1
+109,High-volume close-near-low,Short high-volume bar that closes near its low after a top; exit above bar high,IS,"V,CLV,L",volume/price pressure,S5,E1
+110,Low-volume pullback continuation,"In uptrend, buy retracement on falling volume when price resumes upward; exit below pullback low",IS,"EMA,V",volume/trend,"S1,S5",E1
+111,Low-volume rally fade,"In downtrend, short weak rally on declining volume when price turns down; exit above rally high",IS,"EMA,V",volume/trend,"S1,S5",E1
+112,Volume climax reversal,Fade extreme volume plus range followed by opposite close confirmation; exit beyond climax extreme,IS,"V,TR,C",volume exhaustion,"S5,S10",E1
+113,Volume dry-up breakout,"After volume contracts during base, enter range break with renewed volume; exit on failed break",IS,"VolZ,HH,LL",volume/volatility,S5,E1
+114,Volume dry-up support hold,"In uptrend, buy pullback to support after volume dries up and price turns; exit below support",IS,"V,EMA,swing low",volume/trend,S5,E1
+115,Up-volume dominance,Enter long when volume on rising bars exceeds volume on falling bars over window; exit when dominance reverses,IS,up/down volume sums,volume momentum,S5,E2
+116,Down-volume dominance,Short when down-bar volume dominates up-bar volume and support fails; exit on dominance reversal,IS,up/down volume sums,volume momentum,S5,E2
+117,Volume-weighted price trend proxy,Enter if typical-price/volume proxy rises with price above average; exit on proxy decline,IS,"VWAP*,V,EMA",volume-weighted trend,"S5,S12",E2
+118,Session VWAP proxy reclaim,Buy reclaim of cumulative session typical-price VWAP proxy after opening below; exit on loss of proxy/session close,I,"VWAP*,C",intraday reversion/trend,"S8,S12",E3
+119,Session VWAP proxy rejection,Short failed test of session VWAP proxy from below; cover on reclaim/session close,I,"VWAP*,C",intraday level,"S8,S12",E3
+120,Close-location volume pressure,Enter direction of repeated high-volume bars closing near their extremes; exit when CLV reverses,IS,"V,CLV",volume/price pressure,S5,E2
+121,First-hour momentum follow-through,"After positive first-hour return, buy later break of first-hour high; exit on low break or close",I,"session r,HH,LL",intraday momentum,S8,E3
+122,First-hour downside follow-through,"After negative first-hour return, short later break of first-hour low; cover on high break or close",I,"session r,HH,LL",intraday momentum,S8,E3
+123,Opening drive persistence,Enter direction of strong opening sequence if successive bars hold above/below opening price; exit on reversal/session close,I,"session C,O",intraday trend,S8,E3
+124,Opening drive retracement,Fade opening drive only after retracement exceeds a preset fraction and stalls; exit at opening price/stop,I,"session swing,range",intraday reversal,S8,E4
+125,Midday range breakout,Define midday consolidation; trade its later directional break; exit on range re-entry/session end,I,"session HH,LL",intraday breakout,S8,E3
+126,Midday mean reversion,"In low-trend midday regime, fade price excursion from session mean; exit at mean/close",I,"session mean,ADX",intraday reversion,"S8,S12",E3
+127,Intraday trend pullback,"In strong morning trend, enter first pullback that holds prior swing; exit below/above swing",I,"session pivots,EMA",intraday trend,S8,E3
+128,Intraday range fade,"When session ADX is low, fade tests of session extremes back toward midpoint; exit at midpoint/stop",I,"session H/L,ADX",intraday mean reversion,S12,E4
+129,Closing-hour momentum,Enter direction of cumulative day return when final-hour high/low breaks; exit at close,I,"session return,HH,LL",intraday momentum,S8,E3
+130,Closing-hour reversal,Fade an extreme day move after final-hour reversal confirmation; exit at close or risk stop,I,"session return,CLV",intraday reversal,S8,E3
+131,Intraday return autocorrelation,Trade sign of prior bar return only if recent same-sign return persistence is positive; exit on opposite sign,I,"r1,autocorrelation",intraday momentum,S8,E3
+132,Intraday reversal after large bar,Fade prior bar’s unusually large return if next bar reverses through its midpoint; exit on session close,I,"r1,TR",intraday reversal,"S6,S8",E3
+133,Opening-range retest continuation,"After opening-range break, enter on successful retest of broken boundary; exit on boundary failure",I,"session HH,LL",intraday retest,S8,E3
+134,Opening-range false-break fade,Fade opening-range break that closes back within range; target opposite side/session close,I,"session HH,LL,C",intraday false break,S8,E3
+135,Initial balance extension,"After early-session balance, enter when price accepts outside range with follow-through; exit on re-entry",I,"session HH,LL",intraday breakout,S8,E3
+136,Intraday volatility burst continuation,Trade direction of a large intraday range bar only after next bar confirms; exit on reversal,I,"TR,CLV",intraday volatility,S8,E3
+137,Intraday volatility burst fade,Fade extreme intraday range bar after close returns inside its range; exit at midpoint/session close,I,"TR,C",intraday reversal,S8,E3
+138,Session trend day persistence,"If successive session highs/lows progress one way and pullbacks stay shallow, hold direction to close",I,"session pivots,ATR",intraday trend,S8,E3
+139,Session range day reversion,"If price remains within early range, fade extremes toward midpoint; exit at close or range break",I,"session HH,LL",intraday reversion,S8,E3
+140,Prior-close magnet,"After open deviates from prior close but fails to trend, enter toward prior close; exit at target/session close",I,"gap,ADX",intraday reversion,S8,E4
+141,Overnight gap continuation,Buy positive gap that holds above prior close after opening consolidation; exit on gap fill or close,I,"gap,C",gap continuation,S8,E3
+142,Overnight gap fill,Fade opening gap when price reverses through open; exit at prior close or stop,I,"gap,O,C",gap reversion,S8,E4
+143,Large-gap partial fill,Fade unusually large gap after partial retracement confirmation; exit at a predeclared fill fraction/stop,I,"gap,ATR",gap reversion,S8,E4
+144,Gap reversal into trend,"If gap opposes established trend and price reclaims trend direction, enter trend side; exit on trend failure",I,"gap,EMA",gap/trend,"S2,S8",E2
+145,Gap continuation with volume,Enter gap direction when opening activity has high volume and price holds beyond prior close; exit on retrace,I,"gap,VolZ",gap/volume,"S5,S8",E3
+146,Weekly opening gap hold,Trade direction of weekly opening gap if first daily bar closes beyond prior week close; exit on gap failure,S,"weekly gap,C",gap continuation,S8,E2
+147,Monday reversal hypothesis,Test fade of prior-week-end move at Monday session start after reversal confirmation; exit same session,I,"weekday,prior return",calendar/reversal,S13,E3
+148,Week-start continuation hypothesis,Test continuation of prior-week momentum into first session if opening holds; exit on close/reversal,I,"weekday,rN,gap",calendar/momentum,S13,E3
+149,Month-turn momentum,Test continuation into month-end/first sessions when price trend agrees; exit after fixed calendar window,S,"calendar,rN",calendar/momentum,S14,E3
+150,Month-turn reversal,Test fade of sharp final-session move into first session of next month; exit at prior close/time stop,I,"calendar,session return",calendar/reversal,S14,E3
+151,Month-end close trend,Enter direction of month-to-date return during final sessions; exit at month close,I,"calendar,MTD return",calendar/momentum,S14,E3
+152,Month-start gap reversion,Fade first-session opening gap toward prior close when gap fails to extend; exit same session,I,"calendar,gap",calendar/gap,S14,E3
+153,Quarter-end trend continuation,Test trend-following during final sessions of quarter; exit at quarter close,I,"calendar,MTD return",calendar/momentum,S13,E3
+154,Quarter-start gap reversal,Fade opening gap on first quarter session after a close-to-open reversal; exit same session,I,"calendar,gap",calendar/gap,S13,E3
+155,Holiday-adjacent range breakout,Trade break of prior session range on first session after a market holiday; exit same day,I,"calendar,HH,LL",calendar/breakout,S13,E3
+156,Post-holiday gap fill,Fade post-holiday gap after price fails to extend beyond opening range; exit at prior close/stop,I,"calendar,gap",calendar/reversion,S13,E4
+157,Day-of-week conditional momentum,Trade positive/negative return continuation only on a preselected weekday; exit at fixed horizon,S,"weekday,rN",calendar/momentum,S13,E3
+158,Day-of-week conditional reversal,Fade prior move only on a preselected weekday; exit at mean/time stop,S,"weekday,rN",calendar/reversal,S13,E4
+159,End-of-week range resolution,Trade break of weekly range during final session; exit at weekly close,I,"weekday,weekly HH/LL",calendar/breakout,S13,E3
+160,Start-of-week range resolution,Trade first-session break of prior weekly range; exit on re-entry or week end,I,weekly HH/LL,calendar/breakout,S13,E3
+161,Prior-day high rejection,Short failed test of prior-day high after close back below; exit near day midpoint/stop,I,"prior-day H,C",support/resistance,"S4,S12",E4
+162,Prior-day low rejection,Buy failed test of prior-day low after close back above; exit near midpoint/stop,I,"prior-day L,C",support/resistance,"S4,S12",E4
+163,Prior-day high acceptance,Buy sustained closes above prior-day high; exit on reclaim failure,I,"prior-day H,C",support/resistance breakout,S4,E1
+164,Prior-day low acceptance,Short sustained closes below prior-day low; cover on reclaim,I,"prior-day L,C",support/resistance breakdown,S4,E1
+165,Prior-week high retest,Buy pullback that holds above prior-week high after breakout; exit below level,IS,"prior-week H,C",level retest,"S4,S11",E1
+166,Prior-week low retest,Short bounce that fails below prior-week low after breakdown; cover above level,IS,"prior-week L,C",level retest,S4,E1
+167,Repeated support bounce,Buy confirmed third-or-later support test only after bullish turn; exit below support,IS,pivot lows,support/reversal,"S4,S10",E1
+168,Repeated resistance rejection,Short confirmed repeated resistance test after bearish turn; exit above resistance,IS,pivot highs,resistance/reversal,"S4,S10",E1
+169,Pivot-level reclaim,Buy reclaim of prior confirmed swing pivot after false break; exit below pivot,IS,"swing pivots,C",level reversal,S4,E1
+170,Pivot-level breakdown,Short close below prior confirmed swing support; exit on reclaim,IS,"swing pivots,C",level breakdown,S4,E1
+171,Round-number hold,Buy bounce at predeclared round-number price after close confirms support; exit below level,IS,"price level,C",psychological level,"S4,S10",E1
+172,Round-number rejection,Short failed break of predeclared round-number resistance; exit above level,IS,"price level,C",psychological level,"S4,S10",E1
+173,Prior close support test,Buy intraday test and hold of prior close after opening above it; exit on close below,I,"prior close,C",intraday level,S8,E3
+174,Prior close resistance test,Short intraday test and rejection of prior close after opening below; cover on reclaim,I,"prior close,C",intraday level,S8,E3
+175,Swing-low reclaim,"After undercut of confirmed swing low, buy close back above it; exit below undercut low",IS,"pivot L,C",liquidity-style proxy,S4,E1
+176,Swing-high rejection,"After overshoot of confirmed swing high, short close back below; exit above overshoot high",IS,"pivot H,C",liquidity-style proxy,S4,E1
+177,Range midpoint rotation,"In flat regime, enter toward opposite half after price rejects range midpoint; exit at range edge/stop",IS,"HH,LL,ADX",range rotation,S4,E4
+178,Range-edge to midpoint,"In flat regime, buy lower range edge or short upper edge; exit at midpoint",IS,"HH,LL,ADX",range reversion,S4,E4
+179,Support-resistance polarity flip,"After resistance breakout, buy first subsequent retest holding above former resistance; exit below",IS,"pivot level,C",level polarity,S4,E1
+180,Support-resistance polarity failure,"After support break, short first retest failing below former support; exit above",IS,"pivot level,C",level polarity,S4,E1
+181,Trend-filtered RSI pullback,Buy RSI pullback-and-turn only above rising long average; exit on trend failure,IS,"RSI,EMA",trend + oscillator,"S1,S12",E2
+182,Trend-filtered RSI rally fade,Short RSI rally-and-turn only below falling long average; exit on trend failure,IS,"RSI,EMA",trend + oscillator,"S1,S12",E2
+183,Breakout with ADX confirmation,Trade range breakout only when ADX rises; exit if price closes inside range,IS,"HH,LL,ADX",breakout/regime,"S3,S12",E1
+184,Breakout with relative volume,Trade high/low break only when volume is high versus time-of-day baseline; exit on range re-entry,I,"HH,LL,VolZ",breakout/volume,"S5,S8",E1
+185,Momentum confirmed by OBV,Enter price momentum when OBV slope agrees; exit when either price structure or OBV trend fails,IS,"ROC,OBV",momentum/volume,"S1,S5",E2
+186,Reversal confirmed by volume divergence,Fade price extreme only when OBV fails to confirm and price reverses pivot; exit beyond extreme,IS,"OBV,pivots",reversal/volume,"S5,S10",E1
+187,Gap plus opening-range confirmation,Enter gap direction only after opening-range boundary breaks in same direction; exit on range failure,I,"gap,session HH/LL",gap/breakout,S8,E3
+188,Gap plus prior-level rejection,Fade gap when price rejects prior-day high/low and closes back across it; exit at prior close/stop,I,"gap,prior-day H/L",gap/level reversal,S8,E4
+189,Trend plus volatility squeeze,Trade directional breakout from squeeze only when higher-timeframe average trend agrees; exit on failed break,IS,"BB width,EMA,HH/LL",multi-horizon breakout,"S2,S12",E2
+190,Trend plus volatility exhaustion,Fade countertrend stretch only when ATR-normalized distance is extreme and trend momentum wanes; exit at mean/stop,IS,"ATR,EMA,RSI",countertrend exhaustion,"S6,S15",E4
+191,Two-horizon momentum agreement,Enter when short- and medium-horizon returns align; exit when short horizon flips against longer trend,IS,rN,multi-horizon momentum,"S1,S2",E2
+192,Two-horizon momentum conflict,"When short and long returns oppose, enter long-term direction only after short-term reversal confirms; exit on long trend failure",IS,rN,multi-horizon pullback,"S1,S2",E2
+193,Weekly trend with daily trigger,Use weekly trend direction; enter daily pullback recovery; exit on weekly trend invalidation,S,"weekly EMA,daily swing",multi-horizon trend,"S1,S2",E2
+194,Daily trend with intraday trigger,Use daily trend direction; enter intraday range break in same direction; exit by session close or trend failure,I,"daily EMA,intraday HH/LL",multi-horizon trend,"S2,S8",E3
+195,Daily support with intraday reversal,"At daily support, enter intraday reversal after close back above level; exit below support/session end",I,"daily pivot,intraday C",multi-horizon reversal,"S4,S8",E3
+196,Price-volume accumulation breakout,Enter base breakout when OBV rises during consolidation; exit on price failure or OBV reversal,IS,"OBV,HH,LL",structure/volume,"S4,S5",E1
+197,Failed trend continuation,Fade new high/low when trend filter weakens and close returns inside prior range; exit at range midpoint/stop,IS,"ADX,HH,LL,C",failed continuation,"S4,S10",E4
+198,Trend-day close confirmation,Enter near session close when price trends all day and closes near extreme; exit next session on reversal or time stop,I,"session pivots,CLV",intraday continuation,S8,E3
+199,Weekly reversal after extended move,"After multiweek extreme return, enter only on weekly reversal close; exit at prior swing/stop",S,"rN,weekly pivots",long-horizon reversal,"S7,S10",E4
+200,Monthly trend exhaustion reversal,"After extended monthly move and failure to make new high/low, trade confirmed opposite break; exit at risk stop/time horizon",S,"monthly OHLC,ROC",long-horizon reversal,"S7,S10",E2

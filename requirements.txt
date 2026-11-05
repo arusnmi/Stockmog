@@ -4,3 +4,4 @@ polars>=1.0,<2
 yfinance>=0.2,<1
 huggingface_hub>=0.26,<2
 pyarrow>=17
+hf

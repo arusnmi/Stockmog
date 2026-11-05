@@ -15,6 +15,12 @@ def add_price_features(frame: pl.LazyFrame) -> pl.LazyFrame:
         (safe_divide(pl.col("close"), pl.col("_previous_close")) - 1.0).alias(
             "pct_change"
         ),
+        (
+            safe_divide(pl.col("close"), pl.col("close").shift(5)) - 1.0
+        ).alias("ret_5"),
+        (
+            safe_divide(pl.col("close"), pl.col("close").shift(20)) - 1.0
+        ).alias("ret_20"),
         (pl.col("close") - pl.col("open")).alias("candle_body"),
         safe_divide(
             pl.col("close") - pl.col("open"),
@@ -26,6 +32,10 @@ def add_price_features(frame: pl.LazyFrame) -> pl.LazyFrame:
         safe_divide(pl.col("high") - pl.col("low"), pl.col("close")).alias(
             "candle_range_pct"
         ),
+        safe_divide(
+            pl.col("close") - pl.col("low"),
+            pl.col("high") - pl.col("low"),
+        ).alias("close_location"),
         (safe_divide(pl.col("open"), pl.col("_previous_close")) - 1.0).alias(
             "gap_pct"
         ),
@@ -41,7 +51,7 @@ def _wilder_mean(column: str, period: int) -> pl.Expr:
 
 
 def add_technical_indicators(frame: pl.LazyFrame) -> pl.LazyFrame:
-    """Add EMA, RSI, MACD, ATR, Bollinger and ADX features without future values."""
+    """Add causal moving-average, momentum, volatility, and volume indicators."""
     for period in (9, 20, 50, 200):
         frame = frame.with_columns(
             pl.col("close")
@@ -161,6 +171,37 @@ def add_technical_indicators(frame: pl.LazyFrame) -> pl.LazyFrame:
         .alias("_dx")
     ).with_columns(
         _wilder_mean("_dx", 14).alias("adx_14"),
+        pl.col("_plus_di").alias("plus_di_14"),
+        pl.col("_minus_di").alias("minus_di_14"),
+    ).with_columns(
+        pl.col("high").rolling_max(window_size=14, min_samples=14).alias(
+            "_stoch_high"
+        ),
+        pl.col("low").rolling_min(window_size=14, min_samples=14).alias(
+            "_stoch_low"
+        ),
+        pl.when(pl.col("close") > pl.col("close").shift(1))
+        .then(pl.col("volume").fill_null(0.0))
+        .when(pl.col("close") < pl.col("close").shift(1))
+        .then(-pl.col("volume").fill_null(0.0))
+        .otherwise(0.0)
+        .alias("_obv_change"),
+    ).with_columns(
+        (
+            100.0
+            * safe_divide(
+                pl.col("close") - pl.col("_stoch_low"),
+                pl.col("_stoch_high") - pl.col("_stoch_low"),
+            )
+        ).alias("stoch_k_14"),
+        pl.col("_obv_change").cum_sum().alias("obv"),
+    ).with_columns(
+        pl.col("stoch_k_14")
+        .rolling_mean(window_size=3, min_samples=3)
+        .alias("stoch_d_3"),
+        pl.col("obv").rolling_mean(window_size=20, min_samples=20).alias(
+            "obv_sma_20"
+        ),
     )
 
     return frame.drop(
@@ -184,4 +225,7 @@ def add_technical_indicators(frame: pl.LazyFrame) -> pl.LazyFrame:
         "_plus_di",
         "_minus_di",
         "_dx",
+        "_stoch_high",
+        "_stoch_low",
+        "_obv_change",
     )

@@ -17,7 +17,14 @@ HUGGINGFACE_REPO_ID = "Saintforest/indian-stock-market-minute-data"
 HUGGINGFACE_CACHE_DIR = DATA_DIR / "downloads" / "huggingface"
 STOCK_DATA_DIR = DATA_DIR / "stocks"
 NSE_HOLIDAYS_CSV = DATA_DIR / "calendar" / "nse_holidays.csv"
-INTRADAY_TIMEFRAMES = {"5m": 5, "15m": 15, "30m": 30, "1h": 60}
+INTRADAY_TIMEFRAMES = {
+    "1m": 1,
+    "5m": 5,
+    "15m": 15,
+    "20m": 20,
+    "30m": 30,
+    "1h": 60,
+}
 TIMEFRAME_COLUMNS = [
     "symbol",
     "timestamp",
@@ -34,6 +41,7 @@ TIMEFRAME_COLUMNS = [
 OUTPUT_SUFFIX = ".csv.gz"
 
 DatasetSplit = Literal["minute", "day"]
+PendingSymbolBatches = tuple[str, list[Any]] | None
 
 
 def load_nse_holidays(file_path: str | Path) -> set[date]:
@@ -100,6 +108,7 @@ def _prepare_stock_frame(frame: pl.DataFrame) -> pl.DataFrame:
     if timestamp_type.time_zone is None:
         raise ValueError("Source timestamps must include the UTC timezone.")
 
+    source_symbol = str(frame["symbol"][0]) if frame.height else "unknown"
     expressions = [
         pl.col("timestamp")
         .dt.convert_time_zone("Asia/Kolkata")
@@ -117,7 +126,7 @@ def _prepare_stock_frame(frame: pl.DataFrame) -> pl.DataFrame:
 
     frame = frame.select(expressions).sort("timestamp")
     frame = frame.unique(subset=["timestamp"], keep="last", maintain_order=True)
-    invalid_rows = frame.filter(
+    frame = frame.with_columns(
         pl.any_horizontal(
             pl.any_horizontal(
                 *[
@@ -128,10 +137,19 @@ def _prepare_stock_frame(frame: pl.DataFrame) -> pl.DataFrame:
             pl.col("open") <= 0,
             pl.col("high") < pl.max_horizontal("open", "low", "close"),
             pl.col("low") > pl.min_horizontal("open", "high", "close"),
-        )
-    ).height
+        ).alias("_invalid_ohlc")
+    )
+    invalid_rows = frame.filter(pl.col("_invalid_ohlc")).height
     if invalid_rows:
-        raise ValueError(f"Found {invalid_rows} invalid OHLC rows.")
+        print(
+            f"Warning: dropped {invalid_rows} invalid OHLC row(s) for "
+            f"{source_symbol}.",
+            flush=True,
+        )
+        frame = frame.filter(~pl.col("_invalid_ohlc"))
+    frame = frame.drop("_invalid_ohlc")
+    if frame.is_empty():
+        raise ValueError(f"No valid OHLC rows remain for {source_symbol}.")
     return frame
 
 
@@ -502,7 +520,9 @@ def _process_parquet_shard(
     batch_size: int,
     holidays: set[date],
     date_range: tuple[date, date] | None = None,
-) -> tuple[int, int, date | None, date | None]:
+    pending_symbol: PendingSymbolBatches = None,
+    defer_last_symbol: bool = False,
+) -> tuple[int, int, date | None, date | None, PendingSymbolBatches]:
     try:
         import pyarrow as pa
         import pyarrow.compute as pc
@@ -514,93 +534,105 @@ def _process_parquet_shard(
         ) from exc
 
     parquet_file = pq.ParquetFile(parquet_path)
-    symbol_column = parquet_file.schema_arrow.get_field_index("symbol")
-    timestamp_column = parquet_file.schema_arrow.get_field_index("timestamp")
-    if symbol_column < 0:
-        raise ValueError(f"Parquet shard has no symbol column: {parquet_path}")
-    if timestamp_column < 0:
-        raise ValueError(f"Parquet shard has no timestamp column: {parquet_path}")
+    try:
+        symbol_column = parquet_file.schema_arrow.get_field_index("symbol")
+        timestamp_column = parquet_file.schema_arrow.get_field_index("timestamp")
+        if symbol_column < 0:
+            raise ValueError(f"Parquet shard has no symbol column: {parquet_path}")
+        if timestamp_column < 0:
+            raise ValueError(f"Parquet shard has no timestamp column: {parquet_path}")
 
-    selected_rows = 0
-    processed_symbols = 0
-    minimum_date: date | None = None
-    maximum_date: date | None = None
-    active_symbol: str | None = None
-    symbol_batches: list[Any] = []
+        selected_rows = 0
+        processed_symbols = 0
+        minimum_date: date | None = None
+        maximum_date: date | None = None
+        active_symbol = pending_symbol[0] if pending_symbol is not None else None
+        symbol_batches = pending_symbol[1] if pending_symbol is not None else []
 
-    def flush_symbol() -> None:
-        nonlocal selected_rows, processed_symbols, symbol_batches
-        if active_symbol is None or not symbol_batches:
-            return
-        if active_symbol in seen_symbols:
-            raise ValueError(
-                f"Symbol {active_symbol} appears in multiple Parquet shards. "
-                "The source ordering differs from the dataset documentation."
+        def flush_symbol() -> None:
+            nonlocal selected_rows, processed_symbols, symbol_batches
+            if active_symbol is None or not symbol_batches:
+                return
+            if active_symbol in seen_symbols:
+                raise ValueError(
+                    f"Symbol {active_symbol} appears in non-contiguous Parquet data."
+                )
+            stock_table = pa.Table.from_batches(symbol_batches)
+            stock_frame = pl.from_arrow(stock_table)
+            paths = process_stock_frame(
+                stock_frame,
+                symbol=active_symbol,
+                split=split,
+                output_root=output_root,
+                holidays=holidays,
+                date_range=date_range,
             )
-        seen_symbols.add(active_symbol)
-        stock_table = pa.Table.from_batches(symbol_batches)
-        stock_frame = pl.from_arrow(stock_table)
-        paths = process_stock_frame(
-            stock_frame,
-            symbol=active_symbol,
-            split=split,
-            output_root=output_root,
-            holidays=holidays,
-            date_range=date_range,
+            seen_symbols.add(active_symbol)
+            selected_rows += stock_frame.height
+            processed_symbols += 1
+            print(
+                f"{split}: {active_symbol}: {stock_frame.height} rows -> "
+                f"{len(paths)} CSVs",
+                flush=True,
+            )
+            symbol_batches = []
+
+        for batch in parquet_file.iter_batches(batch_size=batch_size):
+            timestamps = batch.column(timestamp_column)
+            if not pa.types.is_timestamp(timestamps.type) or timestamps.type.tz is None:
+                raise ValueError(
+                    f"Parquet timestamps must be timezone-aware: {parquet_path}"
+                )
+            if len(timestamps):
+                extrema = pc.min_max(timestamps)
+                batch_min = extrema["min"].as_py()
+                batch_max = extrema["max"].as_py()
+                local_min_date = _ist_date(batch_min)
+                local_max_date = _ist_date(batch_max)
+                minimum_date = (
+                    local_min_date
+                    if minimum_date is None
+                    else min(minimum_date, local_min_date)
+                )
+                maximum_date = (
+                    local_max_date
+                    if maximum_date is None
+                    else max(maximum_date, local_max_date)
+                )
+            symbols = batch.column(symbol_column).to_numpy(zero_copy_only=False)
+            if len(symbols) == 0:
+                continue
+            boundaries = np.flatnonzero(symbols[1:] != symbols[:-1]) + 1
+            starts = np.concatenate((np.array([0]), boundaries))
+            ends = np.concatenate((boundaries, np.array([len(symbols)])))
+
+            for start, end in zip(starts, ends):
+                batch_symbol_value = symbols[int(start)]
+                if batch_symbol_value is None:
+                    raise ValueError(f"Null symbol in Parquet shard: {parquet_path}")
+                batch_symbol = str(batch_symbol_value).strip().upper()
+                if not batch_symbol:
+                    raise ValueError(f"Empty symbol in Parquet shard: {parquet_path}")
+                if active_symbol != batch_symbol:
+                    flush_symbol()
+                    active_symbol = batch_symbol
+                if selected_symbols is None or batch_symbol in selected_symbols:
+                    symbol_batches.append(batch.slice(int(start), int(end - start)))
+
+        deferred_symbol = None
+        if defer_last_symbol and active_symbol is not None and symbol_batches:
+            deferred_symbol = (active_symbol, symbol_batches)
+        else:
+            flush_symbol()
+        return (
+            processed_symbols,
+            selected_rows,
+            minimum_date,
+            maximum_date,
+            deferred_symbol,
         )
-        selected_rows += stock_frame.height
-        processed_symbols += 1
-        print(
-            f"{split}: {active_symbol}: {stock_frame.height} rows -> "
-            f"{len(paths)} CSVs",
-            flush=True,
-        )
-        symbol_batches = []
-
-    for batch in parquet_file.iter_batches(batch_size=batch_size):
-        timestamps = batch.column(timestamp_column)
-        if not pa.types.is_timestamp(timestamps.type) or timestamps.type.tz is None:
-            raise ValueError(
-                f"Parquet timestamps must be timezone-aware: {parquet_path}"
-            )
-        if len(timestamps):
-            extrema = pc.min_max(timestamps)
-            batch_min = extrema["min"].as_py()
-            batch_max = extrema["max"].as_py()
-            local_min_date = _ist_date(batch_min)
-            local_max_date = _ist_date(batch_max)
-            minimum_date = (
-                local_min_date
-                if minimum_date is None
-                else min(minimum_date, local_min_date)
-            )
-            maximum_date = (
-                local_max_date
-                if maximum_date is None
-                else max(maximum_date, local_max_date)
-            )
-        symbols = batch.column(symbol_column).to_numpy(zero_copy_only=False)
-        if len(symbols) == 0:
-            continue
-        boundaries = np.flatnonzero(symbols[1:] != symbols[:-1]) + 1
-        starts = np.concatenate((np.array([0]), boundaries))
-        ends = np.concatenate((boundaries, np.array([len(symbols)])))
-
-        for start, end in zip(starts, ends):
-            batch_symbol_value = symbols[int(start)]
-            if batch_symbol_value is None:
-                raise ValueError(f"Null symbol in Parquet shard: {parquet_path}")
-            batch_symbol = str(batch_symbol_value).strip().upper()
-            if not batch_symbol:
-                raise ValueError(f"Empty symbol in Parquet shard: {parquet_path}")
-            if active_symbol != batch_symbol:
-                flush_symbol()
-                active_symbol = batch_symbol
-            if selected_symbols is None or batch_symbol in selected_symbols:
-                symbol_batches.append(batch.slice(int(start), int(end - start)))
-
-    flush_symbol()
-    return processed_symbols, selected_rows, minimum_date, maximum_date
+    finally:
+        parquet_file.close()
 
 
 def _ist_date(timestamp: datetime) -> date:
@@ -626,30 +658,37 @@ def _scan_minute_date_range(
         ) from exc
 
     parquet_file = pq.ParquetFile(parquet_path)
-    timestamp_column = parquet_file.schema_arrow.get_field_index("timestamp")
-    if timestamp_column < 0:
-        raise ValueError(f"Parquet shard has no timestamp column: {parquet_path}")
-    timestamp_type = parquet_file.schema_arrow.field(timestamp_column).type
-    if not pa.types.is_timestamp(timestamp_type) or timestamp_type.tz is None:
-        raise ValueError(f"Parquet timestamps must be timezone-aware: {parquet_path}")
+    try:
+        timestamp_column = parquet_file.schema_arrow.get_field_index("timestamp")
+        if timestamp_column < 0:
+            raise ValueError(f"Parquet shard has no timestamp column: {parquet_path}")
+        timestamp_type = parquet_file.schema_arrow.field(timestamp_column).type
+        if not pa.types.is_timestamp(timestamp_type) or timestamp_type.tz is None:
+            raise ValueError(f"Parquet timestamps must be timezone-aware: {parquet_path}")
 
-    minimum_date: date | None = None
-    maximum_date: date | None = None
-    for batch in parquet_file.iter_batches(
-        batch_size=batch_size,
-        columns=["timestamp"],
-    ):
-        timestamps = batch.column(0)
-        if not len(timestamps):
-            continue
-        extrema = pc.min_max(timestamps)
-        batch_min = _ist_date(extrema["min"].as_py())
-        batch_max = _ist_date(extrema["max"].as_py())
-        minimum_date = batch_min if minimum_date is None else min(minimum_date, batch_min)
-        maximum_date = batch_max if maximum_date is None else max(maximum_date, batch_max)
-    if minimum_date is None or maximum_date is None:
-        raise ValueError(f"Minute Parquet shard contains no timestamps: {parquet_path}")
-    return minimum_date, maximum_date
+        minimum_date: date | None = None
+        maximum_date: date | None = None
+        for batch in parquet_file.iter_batches(
+            batch_size=batch_size,
+            columns=["timestamp"],
+        ):
+            timestamps = batch.column(0)
+            if not len(timestamps):
+                continue
+            extrema = pc.min_max(timestamps)
+            batch_min = _ist_date(extrema["min"].as_py())
+            batch_max = _ist_date(extrema["max"].as_py())
+            minimum_date = (
+                batch_min if minimum_date is None else min(minimum_date, batch_min)
+            )
+            maximum_date = (
+                batch_max if maximum_date is None else max(maximum_date, batch_max)
+            )
+        if minimum_date is None or maximum_date is None:
+            raise ValueError(f"Minute Parquet shard contains no timestamps: {parquet_path}")
+        return minimum_date, maximum_date
+    finally:
+        parquet_file.close()
 
 
 def prepare_huggingface_dataset(
@@ -748,7 +787,9 @@ def prepare_huggingface_dataset(
         ):
             raise ValueError("Could not determine the minute dataset's date coverage.")
         seen_symbols: set[str] = set()
-        for shard_path in shard_paths[current_split]:
+        pending_symbol: PendingSymbolBatches = None
+        split_shards = shard_paths[current_split]
+        for shard_index, shard_path in enumerate(split_shards):
             local_path = Path(
                 hf_hub_download(
                     repo_id=repo_id,
@@ -758,7 +799,7 @@ def prepare_huggingface_dataset(
                 )
             )
             try:
-                count, rows, shard_min, shard_max = _process_parquet_shard(
+                count, rows, shard_min, shard_max, pending_symbol = _process_parquet_shard(
                     local_path,
                     split=current_split,
                     output_root=output_path,
@@ -771,6 +812,8 @@ def prepare_huggingface_dataset(
                         if current_split == "day"
                         else None
                     ),
+                    pending_symbol=pending_symbol,
+                    defer_last_symbol=shard_index < len(split_shards) - 1,
                 )
                 processed_symbols += count
                 source_rows += rows
