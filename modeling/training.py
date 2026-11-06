@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import shutil
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from .control import TrainingControl
+from .control import TrainingControl, _replace_with_retry
 from .data import DatasetSplit, TrainingDataset, impute_and_normalize_sequences
 
 
@@ -22,7 +23,7 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
         json.dumps(payload, indent=2, allow_nan=False) + "\n",
         encoding="utf-8",
     )
-    temporary.replace(path)
+    _replace_with_retry(temporary, path)
 
 
 def _log_loss(labels: np.ndarray, probabilities: np.ndarray) -> float:
@@ -56,6 +57,11 @@ def _probabilities_from_logits(logits: np.ndarray, temperature: float = 1.0) -> 
     scaled -= scaled.max(axis=1, keepdims=True)
     exp_values = np.exp(scaled)
     return exp_values / exp_values.sum(axis=1, keepdims=True)
+
+
+def _xgboost_device(xgb: Any) -> str:
+    build_info = xgb.build_info() if hasattr(xgb, "build_info") else {}
+    return "cuda" if build_info.get("USE_CUDA", False) else "cpu"
 
 
 def _fixed_class_probabilities(model: Any, values: np.ndarray) -> np.ndarray:
@@ -140,7 +146,7 @@ def train_classical_models(
                 f"{checkpoint_path.stem}.tmp.joblib"
             )
             joblib.dump(model, temporary_model)
-            temporary_model.replace(checkpoint_path)
+            _replace_with_retry(temporary_model, checkpoint_path)
             _write_json(state_path, state)
 
         if not state["completed"]:
@@ -175,7 +181,7 @@ def train_classical_models(
             save_tree_checkpoint()
         temporary_final = final_path.with_name(f"{final_path.stem}.tmp.joblib")
         joblib.dump(model, temporary_final)
-        temporary_final.replace(final_path)
+        _replace_with_retry(temporary_final, final_path)
         validation_probabilities = _fixed_class_probabilities(
             model,
             validation_values,
@@ -215,7 +221,7 @@ def train_classical_models(
             f"{linear_path.stem}.tmp.joblib"
         )
         joblib.dump(linear_model, temporary_linear)
-        temporary_linear.replace(linear_path)
+        _replace_with_retry(temporary_linear, linear_path)
     if not control.checkpoint_boundary(lambda: None):
         raise TrainingStopped("Logistic regression stopped at the model boundary")
     validation_probabilities = _fixed_class_probabilities(
@@ -265,6 +271,7 @@ def train_xgboost(
             "XGBoost is not installed. Install the optional training dependencies "
             "from requirements-training.txt."
         ) from exc
+    device = _xgboost_device(xgb)
 
     output = Path(run_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -302,6 +309,7 @@ def train_xgboost(
         "num_class": 3,
         "eval_metric": "mlogloss",
         "tree_method": "hist",
+        "device": device,
         "max_depth": 4,
         "eta": 0.04,
         "subsample": 0.8,
@@ -317,7 +325,7 @@ def train_xgboost(
                 f"{checkpoint_path.stem}.tmp.ubj"
             )
             booster.save_model(temporary_model)
-            temporary_model.replace(checkpoint_path)
+            _replace_with_retry(temporary_model, checkpoint_path)
         _write_json(state_path, state)
 
     if not state.get("completed"):
@@ -342,7 +350,7 @@ def train_xgboost(
                 state["rounds_without_improvement"] = 0
                 temporary_best = best_path.with_name(f"{best_path.stem}.tmp.ubj")
                 booster.save_model(temporary_best)
-                temporary_best.replace(best_path)
+                _replace_with_retry(temporary_best, best_path)
             else:
                 state["rounds_without_improvement"] = (
                     int(state["rounds_without_improvement"]) + 1
@@ -378,6 +386,7 @@ def train_xgboost(
         output / "xgboost.metrics.json",
         {
             "best_round": state["best_round"],
+            "training_device": device,
             "validation": classification_metrics(
                 dataset.labels[split.validation],
                 validation_probabilities,
@@ -448,6 +457,14 @@ def train_lstm(
     final_path = output / "lstm.pt"
     torch.manual_seed(seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device.type == "cuda" and os.name == "nt":
+        torch.backends.cudnn.enabled = False
+        print(
+            "Windows CUDA LSTM training: cuDNN disabled for a clean process exit; "
+            "CUDA remains enabled.",
+            flush=True,
+        )
+    print(f"LSTM training device: {device}", flush=True)
     mean = dataset.features[split.train].mean(axis=0).astype(np.float32)
     scale = dataset.features[split.train].std(axis=0).astype(np.float32)
     scale[scale < 1e-8] = 1.0
@@ -483,7 +500,7 @@ def train_lstm(
             payload["cuda_rng_state"] = torch.cuda.get_rng_state_all()
         temporary = checkpoint_path.with_name(f"{checkpoint_path.name}.tmp")
         torch.save(payload, temporary)
-        temporary.replace(checkpoint_path)
+        _replace_with_retry(temporary, checkpoint_path)
 
     def save_final_model() -> None:
         temporary_final = final_path.with_name(f"{final_path.name}.tmp")
@@ -502,7 +519,7 @@ def train_lstm(
             },
             temporary_final,
         )
-        temporary_final.replace(final_path)
+        _replace_with_retry(temporary_final, final_path)
 
     if checkpoint_path.exists():
         checkpoint = torch.load(
@@ -744,14 +761,78 @@ def calibrate_hybrid(
     probability_stack = np.stack(
         [model_probabilities[name] for name in model_names]
     )
-    for weights in weight_candidates:
-        blended = np.tensordot(weights, probability_stack, axes=(0, 0))
-        for temperature in np.linspace(0.6, 1.6, 21):
-            logits = np.log(np.clip(blended, 1e-12, 1.0))
-            calibrated = _probabilities_from_logits(logits, float(temperature))
-            loss = _log_loss(labels, calibrated)
+    try:
+        import torch
+    except ImportError as exc:
+        raise RuntimeError(
+            "PyTorch is required for hybrid calibration. Install "
+            "requirements-training.txt."
+        ) from exc
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Hybrid calibration device: {device}", flush=True)
+    if device.type == "cuda":
+        available_bytes, _ = torch.cuda.mem_get_info(device)
+        bytes_per_weight = (
+            len(labels)
+            * 21
+            * 3
+            * np.dtype(np.float64).itemsize
+            * 3
+        )
+        chunk_size = max(1, min(8, available_bytes // max(1, bytes_per_weight)))
+    else:
+        chunk_size = 32
+
+    probability_tensor = torch.as_tensor(
+        probability_stack,
+        dtype=torch.float64,
+        device=device,
+    )
+    labels_tensor = torch.as_tensor(labels, dtype=torch.long, device=device)
+    temperatures = torch.as_tensor(
+        np.linspace(0.6, 1.6, 21),
+        dtype=torch.float64,
+        device=device,
+    )
+    weight_array = np.asarray(weight_candidates)
+    with torch.no_grad():
+        for start in range(0, len(weight_candidates), chunk_size):
+            candidate_weights = torch.as_tensor(
+                weight_array[start : start + chunk_size],
+                dtype=torch.float64,
+                device=device,
+            )
+            blended = torch.einsum(
+                "bm,mnc->bnc",
+                candidate_weights,
+                probability_tensor,
+            )
+            logits = torch.log(blended.clamp(min=1e-12, max=1.0))
+            scaled_logits = logits[:, None, :, :] / temperatures[
+                None, :, None, None
+            ]
+            calibrated = torch.softmax(scaled_logits, dim=-1)
+            target_probabilities = calibrated.gather(
+                dim=-1,
+                index=labels_tensor[None, None, :, None].expand(
+                    len(candidate_weights),
+                    len(temperatures),
+                    -1,
+                    1,
+                ),
+            ).squeeze(-1)
+            losses = -torch.log(target_probabilities.clamp_min(1e-12)).mean(dim=-1)
+            flat_index = int(losses.argmin().item())
+            batch_index, temperature_index = divmod(flat_index, len(temperatures))
+            loss = float(losses[batch_index, temperature_index].item())
             if best is None or loss < best[0]:
-                best = (loss, weights.copy(), float(temperature))
+                candidate_index = start + batch_index
+                best = (
+                    loss,
+                    weight_array[candidate_index].copy(),
+                    float(temperatures[temperature_index].item()),
+                )
     if best is None:
         raise RuntimeError("Hybrid calibration did not produce a validation score")
 
@@ -763,6 +844,7 @@ def calibrate_hybrid(
     )
     result = {
         "format_version": 1,
+        "calibration_device": str(device),
         "model_weights": {
             name: float(weight) for name, weight in zip(model_names, weights)
         },

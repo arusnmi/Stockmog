@@ -27,19 +27,28 @@ packages only when ready:
 python -m pip install -r requirements.txt -r requirements-training.txt
 ```
 
-The project roadmap targets Python 3.11. This workspace currently uses Python
-3.14.7, and XGBoost/PyTorch are not installed; verify PyTorch wheel support for
-the interpreter you select (or use the planned Python 3.11 environment) before
-installing and training.
+For a CUDA-enabled Windows PyTorch build, install the GPU-specific requirements
+instead:
+
+```powershell
+python -m pip install -r requirements.txt -r requirements-training-gpu.txt
+```
+
+The GPU requirements pin a PyTorch CUDA wheel tested with the project's Python
+3.14 environment and current NVIDIA driver. The trainer uses CUDA for XGBoost
+when the installed XGBoost build includes CUDA support. PyTorch uses CUDA for
+the LSTM when its CUDA build detects the GPU. On Windows, cuDNN is disabled for
+LSTM training because it caused a native crash at process exit in the tested
+environment; CUDA remains enabled. Check the startup line
+`Training devices: XGBoost=..., LSTM=...` before launching a long batch.
 
 The model suite trains XGBoost, Random Forest, Extra Trees, and regularized
-Logistic Regression on CPU, followed by a small LSTM. XGBoost and the tree
-ensembles suit structured indicator/candlestick features; logistic regression
-is a simpler baseline; the LSTM evaluates ordered sequences. The LSTM uses CUDA
-if PyTorch detects an available GPU, otherwise it runs on CPU. Training is
-sequential; `--models all` trains each estimator in turn and calibrates a
-validation-weighted ensemble. LSTM progress includes process/system RAM and
-CUDA memory usage when a GPU is active.
+Logistic Regression, followed by a small LSTM. XGBoost uses CUDA when available;
+the other tree/classical estimators remain CPU-based. The LSTM uses CUDA when
+PyTorch detects an available GPU, otherwise it runs on CPU. `--models all`
+trains each estimator in turn and calibrates a validation-weighted ensemble.
+LSTM progress includes process/system RAM and CUDA memory usage when a GPU is
+active.
 
 Each classifier predicts loss, near-break-even, and profitable outcomes. The
 LSTM predicts those outcome probabilities plus expected net return in R and a
@@ -90,6 +99,78 @@ Each run stores its model artifacts, data/parameter manifest, per-model metrics,
 validation-based hybrid calibration, and test metrics. Existing runs cannot be
 overwritten accidentally. `--resume` requires the same inputs and training
 parameters as the saved manifest.
+
+## Plan an all-symbol batch
+
+The full matrix across every available interval and all core/catalog strategies
+is extremely large. Create a compact inventory and sequential-stage plan with:
+
+```powershell
+python main.py plan-training-batch
+```
+
+By default this writes
+`data\models\batch-plans\all-symbols-all-intervals.json`, covering symbols and
+CSV intervals present under `data\stocks\minute` and `data\stocks\day`.
+The planned order is stage-major: XGBoost for every job, then LSTM for every
+job, then XGBoost/LSTM hybrid calibration for every job. The plan reports exact
+job and model-fit counts based on files found.
+
+This command is a **planner only**. It starts no training and does not create
+millions of run directories or checkpoints. The full matrix can require
+millions of individual model fits and exceed the available 16 GB of RAM and
+practical runtime by a large margin. A training-batch executor with bounded
+memory, durable per-job checkpoints, and pause/resume is available as
+`train-batch`:
+
+```powershell
+python main.py train-batch `
+  --plan "data\models\batch-plans\all-symbols-all-intervals.json" `
+  --max-jobs-per-stage 1
+```
+
+The bounded example handles at most one symbol/interval/strategy job in each
+stage for that invocation. Rerun the same command with `--resume` to continue
+from the saved stage/job and model checkpoint. For continuous full-matrix
+execution, omit `--max-jobs-per-stage` and explicitly add
+`--allow-large-batch`:
+
+```powershell
+python main.py train-batch `
+  --plan "data\models\batch-plans\all-symbols-all-intervals.json" `
+  --allow-large-batch
+```
+
+The executor completes the XGBoost stage across the matrix, then the LSTM stage,
+then hybrid calibration. Hybrid blend/temperature search also uses CUDA when
+available, and hybrid signal scoring uses GPU-backed XGBoost and LSTM inference.
+It automatically chooses a worker count from available
+CPU and memory, reserving 2 GiB for the system and budgeting 4 GiB per concurrent
+job. CUDA-backed XGBoost runs one job at a time to limit GPU memory contention;
+LSTM fitting is serialized because its checkpointed random-number state is
+process-global. Pause, resume, stop, and inspect it in a second terminal using
+the batch run root from the plan:
+
+```powershell
+python main.py training-control pause --run-dir "data\models\batch-runs"
+python main.py training-control status --run-dir "data\models\batch-runs"
+python main.py training-control resume --run-dir "data\models\batch-runs"
+python main.py training-control stop --run-dir "data\models\batch-runs"
+```
+
+The cursor and run manifest are stored under the run root; model checkpoints
+and hybrid outputs are created per symbol/interval/strategy only as they are
+processed. A stopped batch is continued with the original `train-batch`
+arguments plus `--resume`. `--max-jobs-per-stage` limits work during one
+invocation; remove it on a later `--resume` invocation to continue the stage
+without that limit. The executor releases each job's dataset after its stage.
+It skips jobs with no valid labeled events and
+records their reason; unexpected training errors stop the batch so they can be
+investigated. Do not start the full 3.9-million-job matrix on this laptop
+without first estimating runtime, output storage, and available RAM.
+
+Each catalog ID also shares one of a small number of documented templates, so
+many catalog jobs may repeat equivalent signals.
 
 ## Pause, resume, and stop
 

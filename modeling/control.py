@@ -1,25 +1,34 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from collections.abc import Callable
 from pathlib import Path
+from threading import get_ident
+
+
+def _temporary_path(path: Path) -> Path:
+    return path.with_name(f"{path.name}.{os.getpid()}.{get_ident()}.tmp")
 
 
 def _replace_with_retry(
     temporary: Path,
     destination: Path,
     *,
-    retries: int = 20,
+    retries: int = 8,
 ) -> None:
     for attempt in range(retries):
         try:
             temporary.replace(destination)
             return
-        except PermissionError:
+        except PermissionError as exc:
             if attempt + 1 == retries:
-                raise
-            time.sleep(0.01)
+                raise PermissionError(
+                    f"Could not replace {destination} after {retries} attempts; "
+                    "the file may be locked by another process or marked read-only."
+                ) from exc
+            time.sleep(min(0.05 * (2**attempt), 0.5))
 
 
 class TrainingControl:
@@ -58,7 +67,7 @@ class TrainingControl:
         if action not in {"continue", "pause", "stop"}:
             raise ValueError(f"Unsupported training control request: {action}")
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        temporary = self.path.with_name(f"{self.path.name}.tmp")
+        temporary = _temporary_path(self.path)
         temporary.write_text(
             json.dumps({"action": action}, indent=2) + "\n",
             encoding="utf-8",
@@ -88,7 +97,7 @@ class TrainingControl:
             time.sleep(self.poll_seconds)
 
     def _write_status(self, action: str) -> None:
-        temporary = self.path.with_name(f"{self.path.name}.tmp")
+        temporary = _temporary_path(self.path)
         temporary.write_text(
             json.dumps({"action": action}, indent=2) + "\n",
             encoding="utf-8",

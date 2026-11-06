@@ -12,6 +12,7 @@ from .training import (
     _build_lstm,
     _fixed_class_probabilities,
     _probabilities_from_logits,
+    _xgboost_device,
 )
 
 
@@ -149,6 +150,7 @@ def predict_hybrid_signals(
                 ) from exc
             booster = xgb.Booster()
             booster.load_model(model_path / "xgboost.ubj")
+            booster.set_param({"device": _xgboost_device(xgb)})
             matrix = xgb.DMatrix(
                 candidate_features,
                 feature_names=list(feature_names),
@@ -219,11 +221,24 @@ def predict_hybrid_signals(
         for model_name, weight in model_weights.items()
         if model_name in predicted
     )
-    logits = np.log(np.clip(blended, 1e-12, 1.0))
-    probabilities = _probabilities_from_logits(
-        logits,
-        float(calibration["temperature"]),
-    )
+    if device.type == "cuda":
+        with torch.no_grad():
+            blended_tensor = torch.as_tensor(
+                blended,
+                dtype=torch.float64,
+                device=device,
+            )
+            logits_tensor = torch.log(blended_tensor.clamp(1e-12, 1.0))
+            probabilities = torch.softmax(
+                logits_tensor / float(calibration["temperature"]),
+                dim=-1,
+            ).cpu().numpy()
+    else:
+        logits = np.log(np.clip(blended, 1e-12, 1.0))
+        probabilities = _probabilities_from_logits(
+            logits,
+            float(calibration["temperature"]),
+        )
     scored: list[dict[str, Any] | None] = [None] * len(candidate_rows)
     thresholds = calibration.get("regime_thresholds", {})
     for row_index, candidate_index in enumerate(usable):
