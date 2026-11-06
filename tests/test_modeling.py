@@ -306,15 +306,21 @@ class ModelingTests(unittest.TestCase):
         )
         self.assertEqual(catalog_args.strategy, "catalog_001")
 
-    def test_batch_plan_is_compact_stage_ordered_and_does_not_train(self):
+    def test_batch_plan_pools_symbols_across_all_timeframes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             stock_data = root / "stocks"
             for split, symbol, interval in (
                 ("minute", "AAA", "1m"),
+                ("minute", "BBB", "1m"),
+                ("minute", "AAA", "5m"),
+                ("minute", "AAA", "15m"),
                 ("minute", "AAA", "20m"),
+                ("minute", "AAA", "30m"),
+                ("minute", "AAA", "1h"),
                 ("day", "AAA", "1d"),
-                ("minute", "BBB", "20m"),
+                ("day", "AAA", "2d"),
+                ("day", "AAA", "trading_week"),
             ):
                 symbol_directory = stock_data / split / symbol
                 symbol_directory.mkdir(parents=True, exist_ok=True)
@@ -333,8 +339,30 @@ class ModelingTests(unittest.TestCase):
             saved = json.loads(output.read_text(encoding="utf-8"))
 
         self.assertEqual(plan["status"], "planned")
+        self.assertEqual(plan["format_version"], 3)
         self.assertFalse(plan["training_started"])
-        self.assertEqual(plan["symbols"], ["AAA", "BBB"])
+        self.assertNotIn("symbols", plan)
+        self.assertEqual(plan["input_file_count"], 10)
+        self.assertEqual(plan["strategy_count"], 4)
+        self.assertEqual(plan["interval_count"], 9)
+        self.assertEqual(plan["job_count"], 36)
+        self.assertTrue(all(job["universe"] == "pooled" for job in jobs))
+        self.assertTrue(
+            all("symbol" not in job and "symbols" not in job for job in jobs)
+        )
+        self.assertEqual(len(jobs[0]["inputs"]), 2)
+        self.assertEqual(
+            {group["interval"] for group in plan["groups"]},
+            {"1m", "5m", "15m", "20m", "30m", "1h", "1d", "2d", "trading_week"},
+        )
+        self.assertTrue(
+            all(
+                "input_files" in group and "symbols" not in group
+                for group in plan["groups"]
+            )
+        )
+        self.assertIn("may exceed available system memory", plan["execution_warning"])
+        self.assertEqual(len({job["run_dir"] for job in jobs}), len(jobs))
         self.assertEqual(plan["model_stages"], ["xgboost", "lstm", "hybrid_calibration"])
         self.assertEqual(plan["execution_order"].split(":")[0], "stage-major")
         self.assertEqual(plan["job_count"], len(jobs))
@@ -358,10 +386,11 @@ class ModelingTests(unittest.TestCase):
             root = Path(temporary)
             stocks = root / "stocks"
             (stocks / "minute" / "AAA").mkdir(parents=True)
-            (stocks / "minute" / "AAA" / "20m.csv.gz").write_bytes(b"fixture")
+            (stocks / "minute" / "AAA" / "15m.csv.gz").write_bytes(b"fixture")
             plan = build_training_batch_plan(
                 stock_data_dir=stocks,
                 run_root=root / "runs",
+                symbols=["AAA"],
             )
             output = root / "plan.json"
             output.write_text("existing", encoding="utf-8")
@@ -382,7 +411,7 @@ class ModelingTests(unittest.TestCase):
             plan_path.write_text(
                 json.dumps(
                     {
-                        "format_version": 1,
+                        "format_version": 3,
                         "training_started": False,
                         "model_stages": [
                             "xgboost",
@@ -396,8 +425,11 @@ class ModelingTests(unittest.TestCase):
                             {
                                 "style": "intraday",
                                 "interval": "20m",
-                                "strategies": ["box_breakout"],
-                                "symbols": ["AAA", "BBB"],
+                                "strategies": ["box_breakout", "momentum"],
+                                "input_files": [
+                                    str(root / "stocks" / "minute" / symbol / "20m.csv.gz")
+                                    for symbol in ("AAA", "BBB")
+                                ],
                                 "job_count": 2,
                             }
                         ],
@@ -495,7 +527,11 @@ class ModelingTests(unittest.TestCase):
     def test_batch_planning_cli_is_available_without_running_training(self):
         args = build_parser().parse_args(["plan-training-batch"])
         self.assertEqual(args.command, "plan-training-batch")
-        self.assertEqual(args.output, "data\\models\\batch-plans\\all-symbols-all-intervals.json")
+        self.assertEqual(
+            args.output,
+            "data\\models\\batch-plans\\all-timeframes-pooled.json",
+        )
+        self.assertIsNone(args.symbols)
 
     def test_batch_trainer_runs_xgboost_then_lstm_then_hybrid(self):
         from unittest.mock import patch
@@ -510,7 +546,7 @@ class ModelingTests(unittest.TestCase):
             plan_path.write_text(
                 json.dumps(
                     {
-                        "format_version": 1,
+                        "format_version": 3,
                         "training_started": False,
                         "model_stages": [
                             "xgboost",
@@ -524,8 +560,11 @@ class ModelingTests(unittest.TestCase):
                             {
                                 "style": "intraday",
                                 "interval": "20m",
-                                "strategies": ["box_breakout"],
-                                "symbols": ["AAA", "BBB"],
+                                "strategies": ["box_breakout", "momentum"],
+                                "input_files": [
+                                    str(root / "stocks" / "minute" / symbol / "20m.csv.gz")
+                                    for symbol in ("AAA", "BBB")
+                                ],
                                 "job_count": 2,
                             }
                         ],
@@ -650,8 +689,8 @@ class ModelingTests(unittest.TestCase):
                     "lstm",
                 ],
             )
-            for symbol in ("AAA", "BBB"):
-                job_dir = root / "runs" / "20m" / "box_breakout" / symbol
+            for strategy in ("box_breakout", "momentum"):
+                job_dir = root / "runs" / "20m" / strategy / "pooled"
                 self.assertTrue((job_dir / "hybrid.json").is_file())
                 self.assertTrue((job_dir / "hybrid-batch-metrics.json").is_file())
 
@@ -662,7 +701,7 @@ class ModelingTests(unittest.TestCase):
             plan_path.write_text(
                 json.dumps(
                     {
-                        "format_version": 1,
+                        "format_version": 3,
                         "training_started": False,
                         "model_stages": [
                             "xgboost",

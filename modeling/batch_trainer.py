@@ -14,7 +14,7 @@ from typing import Any, cast
 import numpy as np
 
 from backtesting.execution_simulator import ExecutionCosts
-from .batch_plan import TrainingBatchPlan, iter_planned_jobs
+from .batch_plan import TrainingBatchPlan, TrainingJob, iter_planned_jobs
 from .control import TrainingControl, _replace_with_retry
 from .data import (
     DatasetSplit,
@@ -33,7 +33,7 @@ from .training import (
     train_xgboost,
 )
 
-_BATCH_FORMAT_VERSION = 1
+_BATCH_FORMAT_VERSION = 2
 _BYTES_PER_GIB = 1024**3
 _WORKER_MEMORY_GIB = 4
 _RESERVED_MEMORY_GIB = 2
@@ -98,7 +98,7 @@ def _write_atomic(path: Path, payload: dict[str, Any]) -> None:
 
 def _read_plan(path: Path) -> TrainingBatchPlan:
     plan = cast(TrainingBatchPlan, json.loads(path.read_text(encoding="utf-8")))
-    if plan.get("format_version") != 1 or plan.get("model_stages") != [
+    if plan.get("format_version") != 3 or plan.get("model_stages") != [
         "xgboost",
         "lstm",
         "hybrid_calibration",
@@ -158,7 +158,7 @@ def _release_lock(path: Path, process_id: int) -> None:
 
 
 def _build_dataset_for_job(
-    job: dict[str, str],
+    job: TrainingJob,
     *,
     sequence_length: int,
     validation_fraction: float,
@@ -167,7 +167,7 @@ def _build_dataset_for_job(
 ) -> tuple[TrainingDataset, DatasetSplit]:
     horizon = 12 if job["style"] == "intraday" else 10
     dataset = build_training_dataset(
-        [job["input"]],
+        job["inputs"],
         style=cast(ModelStyle, job["style"]),
         strategy=job["strategy"],
         horizon=horizon,
@@ -185,17 +185,25 @@ def _build_dataset_for_job(
 def _save_job_metadata(
     *,
     run_dir: Path,
-    job: dict[str, str],
+    job: TrainingJob,
     dataset: TrainingDataset,
     split: DatasetSplit,
 ) -> None:
     manifest_path = run_dir / "batch-job.json"
-    stat = Path(job["input"]).stat()
+    input_fingerprints = []
+    for input_path in job["inputs"]:
+        stat = Path(input_path).stat()
+        input_fingerprints.append(
+            {
+                "path": str(Path(input_path).resolve()),
+                "size": stat.st_size,
+                "mtime_ns": stat.st_mtime_ns,
+            }
+        )
     manifest = {
         "format_version": _BATCH_FORMAT_VERSION,
         **job,
-        "input_size": stat.st_size,
-        "input_mtime_ns": stat.st_mtime_ns,
+        "input_fingerprints": input_fingerprints,
         "sequence_length": dataset.sequence_length,
         "horizon": dataset.horizon,
         "feature_names": list(dataset.feature_names),
@@ -237,11 +245,7 @@ def _save_job_metadata(
         "test_examples": len(split.test),
         "validation_start": split.validation_start.isoformat(),
         "test_start": split.test_start.isoformat(),
-        "input_fingerprint": {
-            "path": str(Path(job["input"]).resolve()),
-            "size": stat.st_size,
-            "mtime_ns": stat.st_mtime_ns,
-        },
+        "input_fingerprint": {"files": input_fingerprints},
     }
     _write_atomic(metadata_path := run_dir / "metadata.json", metadata)
     _write_atomic(manifest_path, manifest)
@@ -249,7 +253,7 @@ def _save_job_metadata(
 
 def _calibrate_job_hybrid(
     *,
-    job: dict[str, str],
+    job: TrainingJob,
     run_dir: Path,
     dataset: TrainingDataset,
     split: DatasetSplit,
@@ -307,7 +311,7 @@ def _calibrate_job_hybrid(
         "style": job["style"],
         "interval": job["interval"],
         "strategy": job["strategy"],
-        "symbol": job["symbol"],
+        "universe": job["universe"],
         "validation": calibration["validation_metrics"],
         "test": classification_metrics(
             dataset.labels[split.test],
@@ -321,12 +325,12 @@ def _calibrate_job_hybrid(
     return result
 
 
-def _job_run_directory(root: Path, job: dict[str, str]) -> Path:
-    return root / job["interval"] / job["strategy"] / job["symbol"]
+def _job_run_directory(root: Path, job: TrainingJob) -> Path:
+    return root / job["interval"] / job["strategy"] / job["universe"]
 
 
 def _prepare_for_stage(
-    job: dict[str, str],
+    job: TrainingJob,
     *,
     run_dir: Path,
     sequence_length: int,
@@ -377,7 +381,7 @@ def _prepare_for_stage(
 def _train_stage(
     stage: str,
     *,
-    job: dict[str, str],
+    job: TrainingJob,
     run_dir: Path,
     dataset: TrainingDataset,
     split: DatasetSplit,
@@ -455,7 +459,7 @@ def _train_stage(
 def _process_batch_job(
     stage: str,
     *,
-    job: dict[str, str],
+    job: TrainingJob,
     run_root: Path,
     sequence_length: int,
     validation_fraction: float,

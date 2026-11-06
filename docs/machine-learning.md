@@ -100,77 +100,74 @@ validation-based hybrid calibration, and test metrics. Existing runs cannot be
 overwritten accidentally. `--resume` requires the same inputs and training
 parameters as the saved manifest.
 
-## Plan an all-symbol batch
+## Plan pooled training across timeframes
 
-The full matrix across every available interval and all core/catalog strategies
-is extremely large. Create a compact inventory and sequential-stage plan with:
+The planner includes every supported interval with data: `1m`, `5m`, `15m`,
+`20m`, `30m`, `1h`, `1d`, `2d`, and `trading_week`. Symbols are pooled together
+as input observations; there is no per-symbol model/job dimension. The four
+implemented strategy families (`box_breakout`, `momentum`, `trend_following`,
+and `mean_reversion`) remain separate candidates. Catalog IDs are excluded
+because they reuse approximate templates rather than independently validated
+rules.
+
+This is not a claim that the strategies are profitable. Compare cost-aware
+chronological holdouts and portfolio backtests before selecting any candidate.
+
+Generate the all-symbol/all-timeframe plan:
 
 ```powershell
 python main.py plan-training-batch
 ```
 
 By default this writes
-`data\models\batch-plans\all-symbols-all-intervals.json`, covering symbols and
-CSV intervals present under `data\stocks\minute` and `data\stocks\day`.
-The planned order is stage-major: XGBoost for every job, then LSTM for every
-job, then XGBoost/LSTM hybrid calibration for every job. The plan reports exact
-job and model-fit counts based on files found.
+`data\models\batch-plans\all-timeframes-pooled.json` and reserves output under
+`data\models\batch-runs\all-timeframes-pooled`. For a fully populated dataset,
+the plan contains 36 pooled jobs (4 strategies × 9 intervals), 72 model fits,
+and 36 hybrid calibrations. The plan records each input CSV path but does not
+make symbol-specific jobs. An optional `--symbols` filter is available for
+small test runs:
 
-This command is a **planner only**. It starts no training and does not create
-millions of run directories or checkpoints. The full matrix can require
-millions of individual model fits and exceed the available 16 GB of RAM and
-practical runtime by a large margin. A training-batch executor with bounded
-memory, durable per-job checkpoints, and pause/resume is available as
-`train-batch`:
+```powershell
+python main.py plan-training-batch --symbols RELIANCE HDFCBANK INFY TCS
+```
+
+Planning does not start training.
+
+**Do not run the full pooled plan yet.** The current dataset builder retains
+feature-event sequences in memory rather than streaming. The local dataset has
+about 24,000 input files and 244 GiB of compressed CSV data; the 1-minute files
+alone are about 166 GiB compressed. Pooling one interval across every symbol can
+exceed the laptop's 16 GiB RAM. A larger-GPU machine does not automatically solve
+this host-memory/data-preparation limit. The planner records this warning in its
+JSON so it is not mistaken for a safe-to-run queue. First implement bounded,
+on-disk dataset preparation/training, or use `--symbols` to make a smaller
+pilot.
+
+For a small filtered pilot only, after creating the plan:
 
 ```powershell
 python main.py train-batch `
-  --plan "data\models\batch-plans\all-symbols-all-intervals.json" `
+  --plan "data\models\batch-plans\all-timeframes-pooled.json" `
   --max-jobs-per-stage 1
 ```
 
-The bounded example handles at most one symbol/interval/strategy job in each
-stage for that invocation. Rerun the same command with `--resume` to continue
-from the saved stage/job and model checkpoint. For continuous full-matrix
-execution, omit `--max-jobs-per-stage` and explicitly add
-`--allow-large-batch`:
+Each pooled model has one `pooled` artifact directory per interval and
+strategy. Checkpoints, pause/resume state, and input-file fingerprints are
+preserved. Pause, resume, stop, and inspect a run using the run root recorded in
+the plan:
 
 ```powershell
-python main.py train-batch `
-  --plan "data\models\batch-plans\all-symbols-all-intervals.json" `
-  --allow-large-batch
+python main.py training-control pause --run-dir "data\models\batch-runs\all-timeframes-pooled"
+python main.py training-control status --run-dir "data\models\batch-runs\all-timeframes-pooled"
+python main.py training-control resume --run-dir "data\models\batch-runs\all-timeframes-pooled"
+python main.py training-control stop --run-dir "data\models\batch-runs\all-timeframes-pooled"
 ```
 
-The executor completes the XGBoost stage across the matrix, then the LSTM stage,
-then hybrid calibration. Hybrid blend/temperature search also uses CUDA when
-available, and hybrid signal scoring uses GPU-backed XGBoost and LSTM inference.
-It automatically chooses a worker count from available
-CPU and memory, reserving 2 GiB for the system and budgeting 4 GiB per concurrent
-job. CUDA-backed XGBoost runs one job at a time to limit GPU memory contention;
-LSTM fitting is serialized because its checkpointed random-number state is
-process-global. Pause, resume, stop, and inspect it in a second terminal using
-the batch run root from the plan:
-
-```powershell
-python main.py training-control pause --run-dir "data\models\batch-runs"
-python main.py training-control status --run-dir "data\models\batch-runs"
-python main.py training-control resume --run-dir "data\models\batch-runs"
-python main.py training-control stop --run-dir "data\models\batch-runs"
-```
-
-The cursor and run manifest are stored under the run root; model checkpoints
-and hybrid outputs are created per symbol/interval/strategy only as they are
-processed. A stopped batch is continued with the original `train-batch`
-arguments plus `--resume`. `--max-jobs-per-stage` limits work during one
-invocation; remove it on a later `--resume` invocation to continue the stage
-without that limit. The executor releases each job's dataset after its stage.
-It skips jobs with no valid labeled events and
-records their reason; unexpected training errors stop the batch so they can be
-investigated. Do not start the full 3.9-million-job matrix on this laptop
-without first estimating runtime, output storage, and available RAM.
-
-Each catalog ID also shares one of a small number of documented templates, so
-many catalog jobs may repeat equivalent signals.
+The cursor and run manifest are stored under the run root. The executor skips
+pooled jobs with no valid labeled events and records the reason; unexpected
+training errors stop the batch for investigation. XGBoost jobs are stage-major,
+followed by LSTM and then hybrid calibration. CUDA XGBoost jobs run one at a
+time; LSTM fitting is serialized.
 
 ## Pause, resume, and stop
 

@@ -539,7 +539,9 @@ def train_lstm(
         torch.set_rng_state(checkpoint["torch_rng_state"].cpu())
         np.random.set_state(checkpoint["numpy_rng_state"])
         if torch.cuda.is_available() and "cuda_rng_state" in checkpoint:
-            torch.cuda.set_rng_state_all(checkpoint["cuda_rng_state"])
+            torch.cuda.set_rng_state_all(
+                [state.cpu() for state in checkpoint["cuda_rng_state"]]
+            )
     else:
         save_checkpoint()
 
