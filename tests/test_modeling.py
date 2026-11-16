@@ -3,11 +3,14 @@ import tempfile
 import threading
 import time
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from importlib.util import find_spec
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
+import polars as pl
 
 from backtesting.execution_simulator import ExecutionCosts
 from main import build_parser
@@ -23,12 +26,17 @@ from modeling.data import (
     TrainingDataset,
     _label_candidate,
     _outcome_label,
+    _write_npy_from_raw,
+    build_training_dataset,
     chronological_split,
     impute_and_normalize_sequences,
+    training_feature_statistics,
 )
 from modeling.batch_trainer import run_training_batch
 from modeling.batch_trainer import _recommended_worker_count
 from modeling.data import DatasetSplit, TrainingDataset
+from modeling.hybrid import predict_hybrid_signals
+from modeling.walk_forward import walk_forward_splits
 from modeling.training import (
     _xgboost_device,
     calibrate_hybrid,
@@ -37,6 +45,14 @@ from modeling.training import (
 
 
 class ModelingTests(unittest.TestCase):
+    def test_duration_format_uses_readable_units(self):
+        from modeling.eta import format_duration
+
+        self.assertEqual(format_duration(42), "42s")
+        self.assertEqual(format_duration(125), "2m 05s")
+        self.assertEqual(format_duration(3 * 3600 + 120), "3h 02m")
+        self.assertEqual(format_duration(2 * 86400 + 3600), "2d 1h 00m")
+
     def test_xgboost_device_uses_cuda_when_build_supports_it(self):
         class XGBoostCudaBuild:
             @staticmethod
@@ -112,6 +128,329 @@ class ModelingTests(unittest.TestCase):
         )
         np.testing.assert_allclose(result, [[[0.0, 1.0]]])
 
+    def test_missing_training_features_are_imputed_without_using_future_values(self):
+        mean, scale, observed = training_feature_statistics(
+            np.asarray([[1.0, np.nan], [3.0, np.nan]], dtype=np.float32)
+        )
+        np.testing.assert_array_equal(observed, [True, False])
+        np.testing.assert_allclose(mean, [2.0, 0.0])
+        np.testing.assert_allclose(scale, [1.0, 1.0])
+        normalized = impute_and_normalize_sequences(
+            np.asarray([[[np.nan, 500.0], [3.0, np.nan]]], dtype=np.float32),
+            mean=mean,
+            scale=scale,
+            observed=observed,
+        )
+        np.testing.assert_allclose(normalized, [[[0.0, 0.0], [1.0, 0.0]]])
+
+    def test_weekly_events_allow_missing_ema_200_but_not_other_missing_features(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            input_path = root / "trading_week.csv.gz"
+            input_path.write_bytes(b"fixture")
+            timestamps = [datetime(2024, 1, 1) + timedelta(days=7 * i) for i in range(8)]
+            frame = pl.DataFrame({
+                "timestamp": timestamps,
+                "open": [100.0] * 8,
+                "high": [102.0] * 8,
+                "low": [98.0] * 8,
+                "close": [100.5] * 8,
+                "ema_200": [None] * 8,
+                "other": [1.0, 1.0, 1.0, None, 1.0, 1.0, 1.0, 1.0],
+            }).with_columns(pl.col("ema_200").cast(pl.Float64))
+            signals = pl.DataFrame({
+                "timestamp": [timestamps[2], timestamps[3], timestamps[4]],
+                "direction": ["long"] * 3,
+                "entry_price": [100.0] * 3,
+                "stop_price": [99.0] * 3,
+                "reward_risk": [1.0] * 3,
+            })
+            with (
+                patch("modeling.data.build_features", return_value=SimpleNamespace(collect=lambda: frame)),
+                patch("modeling.data.generate_strategy_signals", return_value=signals),
+            ):
+                memory = build_training_dataset(
+                    [input_path], style="swing", strategy="box_breakout",
+                    horizon=1, sequence_length=2,
+                )
+                cached = build_training_dataset(
+                    [input_path], style="swing", strategy="box_breakout",
+                    horizon=1, sequence_length=2, cache_dir=root / "cache",
+                )
+            self.assertEqual(len(memory.labels), 2)
+            self.assertEqual(len(cached.labels), 2)
+            self.assertTrue(np.isnan(memory.features[:, 0]).all())
+            np.testing.assert_allclose(cached.features, memory.features, equal_nan=True)
+            del cached, memory
+
+    def test_weekly_inference_scores_missing_ema_with_training_mask(self):
+        try:
+            import torch
+        except ImportError:
+            self.skipTest("PyTorch is not installed")
+        timestamps = [datetime(2024, 1, 1) + timedelta(days=7 * i) for i in range(3)]
+        frame = pl.DataFrame({
+            "timestamp": timestamps,
+            "ema_200": [None, None, 1000.0],
+            "other": [1.0, 2.0, None],
+        }).with_columns(pl.col("ema_200").cast(pl.Float64))
+        signals = pl.DataFrame({
+            "timestamp": timestamps[1:],
+            "style": ["swing", "swing"],
+            "strategy": ["momentum", "momentum"],
+        })
+        inputs = []
+
+        class FakeNetwork:
+            def to(self, device):
+                return self
+
+            def load_state_dict(self, state):
+                pass
+
+            def eval(self):
+                pass
+
+            def __call__(self, tensor):
+                inputs.append(tensor.cpu().numpy())
+                return torch.tensor(
+                    [[0.0, 0.0, 2.0, 1.0, -1.0]], device=tensor.device
+                )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "metadata.json").write_text(json.dumps({
+                "style": "swing", "strategy": "momentum",
+                "feature_names": ["ema_200", "other"],
+                "mean": [0.0, 1.0], "scale": [1.0, 1.0],
+                "sequence_length": 2, "optional_missing_features": ["ema_200"],
+                "observed_features": [False, True],
+            }), encoding="utf-8")
+            (root / "hybrid.json").write_text(json.dumps({
+                "format_version": 1, "model_weights": {"lstm": 1.0},
+                "temperature": 1.0,
+            }), encoding="utf-8")
+            checkpoint = {
+                "feature_names": ["ema_200", "other"], "style": "swing",
+                "strategy": "momentum", "mean": [0.0, 1.0],
+                "scale": [1.0, 1.0], "observed_features": [False, True],
+                "model_state": {},
+            }
+            with (
+                patch("torch.load", return_value=checkpoint),
+                patch("modeling.hybrid._build_lstm", return_value=FakeNetwork()),
+            ):
+                result = predict_hybrid_signals(frame, signals, model_dir=root)
+                rejected = predict_hybrid_signals(
+                    frame, signals, model_dir=root, minimum_win_probability=1.0,
+                )
+                all_candidates = predict_hybrid_signals(
+                    frame, signals, model_dir=root, minimum_win_probability=1.0,
+                    include_all_candidates=True,
+                )
+                unscorable = predict_hybrid_signals(
+                    frame, signals.tail(1), model_dir=root,
+                    include_all_candidates=True,
+                )
+                zero_weight_lstm = None
+                if find_spec("xgboost") is not None:
+                    (root / "hybrid.json").write_text(json.dumps({
+                        "format_version": 1,
+                        "model_weights": {"xgboost": 1.0, "lstm": 0.0},
+                        "temperature": 1.0,
+                    }), encoding="utf-8")
+                    booster = SimpleNamespace(
+                        load_model=lambda _: None,
+                        set_param=lambda _: None,
+                        predict=lambda _: np.asarray([[0.1, 0.2, 0.7]]),
+                    )
+                    with (
+                        patch("xgboost.Booster", return_value=booster),
+                        patch("xgboost.DMatrix", return_value=object()),
+                    ):
+                        zero_weight_lstm = predict_hybrid_signals(
+                            frame, signals.head(1), model_dir=root,
+                            include_all_candidates=True,
+                        )
+            (root / "hybrid.json").write_text(json.dumps({
+                "format_version": 1, "model_weights": {"lstm": 1.0},
+                "temperature": 1.0,
+            }), encoding="utf-8")
+
+            class UncertainLossNetwork(FakeNetwork):
+                def __call__(self, tensor):
+                    return torch.tensor(
+                        [[0.0, 0.0, 0.0, -1.0, -1.0]], device=tensor.device
+                    )
+
+            with (
+                patch("torch.load", return_value=checkpoint),
+                patch("modeling.hybrid._build_lstm", return_value=UncertainLossNetwork()),
+            ):
+                experimental = predict_hybrid_signals(
+                    frame, signals, model_dir=root, include_all_candidates=True,
+                )
+                legacy = predict_hybrid_signals(
+                    frame, signals, model_dir=root, include_all_candidates=True,
+                    minimum_win_probability=0.45,
+                    require_return_and_low_uncertainty=True,
+                )
+                stricter = predict_hybrid_signals(
+                    frame, signals, model_dir=root, include_all_candidates=True,
+                    minimum_win_probability=0.40,
+                )
+        self.assertEqual(result.height, 1)
+        self.assertEqual(result["timestamp"][0], timestamps[1])
+        np.testing.assert_array_equal(inputs[0][0, :, 0], [0.0, 0.0])
+        self.assertEqual(rejected.height, 0)
+        self.assertEqual(all_candidates.height, 2)
+        self.assertEqual(all_candidates["accepted"].to_list(), [False, None])
+        self.assertIsNotNone(all_candidates["win_probability"][0])
+        self.assertIsNone(all_candidates["win_probability"][1])
+        self.assertEqual(unscorable["accepted"].to_list(), [None])
+        self.assertIsNone(unscorable["win_probability"][0])
+        if zero_weight_lstm is not None:
+            self.assertAlmostEqual(zero_weight_lstm["win_probability"][0], 0.7)
+            self.assertAlmostEqual(zero_weight_lstm["expected_return_r"][0], 1.0)
+        self.assertEqual(experimental["accepted"].to_list(), [True, None])
+        self.assertLess(experimental["expected_return_r"][0], 0)
+        self.assertGreater(experimental["uncertainty"][0], 0.95)
+        self.assertEqual(legacy["accepted"].to_list(), [False, None])
+        self.assertEqual(stricter["accepted"].to_list(), [False, None])
+
+    def test_event_stride_is_causal_and_cached(self):
+        timestamps = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(12)]
+        frame = pl.DataFrame({
+            "timestamp": timestamps, "open": [100.0] * 12,
+            "high": [102.0] * 12, "low": [98.0] * 12,
+            "close": [100.0] * 12, "feature": [1.0] * 12,
+        })
+        signals = pl.DataFrame({"timestamp": timestamps[1:10]})
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "1d.csv.gz"
+            path.write_bytes(b"fixture")
+            with (
+                patch("modeling.data.build_features", return_value=SimpleNamespace(collect=lambda: frame)),
+                patch("modeling.data.generate_strategy_signals", return_value=signals),
+                patch("modeling.data._label_candidate", side_effect=lambda **kw: (
+                    0, kw["signal"]["timestamp"] + timedelta(hours=1), 0.0
+                )),
+            ):
+                memory = build_training_dataset(
+                    [path], style="swing", strategy="momentum", horizon=1,
+                    sequence_length=1, event_stride=3,
+                )
+                with patch("modeling.data.generate_strategy_signals", return_value=signals.head(6)):
+                    prefix = build_training_dataset(
+                        [path], style="swing", strategy="momentum", horizon=1,
+                        sequence_length=1, event_stride=3,
+                    )
+                cached = build_training_dataset(
+                    [path], style="swing", strategy="momentum", horizon=1,
+                    sequence_length=1, event_stride=3,
+                    cache_dir=Path(temporary) / "cache",
+                )
+                self.assertEqual(memory.timestamps, tuple(timestamps[1:10:3]))
+                self.assertEqual(prefix.timestamps, memory.timestamps[:2])
+                self.assertEqual(len(cached.labels), 3)
+                np.testing.assert_array_equal(cached.features, memory.features)
+                with self.assertRaisesRegex(ValueError, "cannot be combined"):
+                    build_training_dataset(
+                        [path], style="swing", strategy="momentum", horizon=1,
+                        event_stride=3, max_events_per_file=2,
+                    )
+                del cached
+
+    def test_pooled_dataset_cache_uses_disk_backed_arrays_and_reuses_cache(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            input_path = root / "stocks" / "minute" / "AAA" / "15m.csv.gz"
+            input_path.parent.mkdir(parents=True)
+            input_path.write_bytes(b"fixture")
+            timestamps = tuple(
+                datetime(2024, 1, 1) + timedelta(days=index)
+                for index in range(12)
+            )
+            frame = pl.DataFrame(
+                {
+                    "timestamp": timestamps,
+                    "open": [100.0] * 12,
+                    "high": [102.0] * 12,
+                    "low": [98.0] * 12,
+                    "close": [100.5] * 12,
+                    "feature_x": [float(index * 10_000) for index in range(12)],
+                }
+            )
+            signals = pl.DataFrame(
+                {
+                    "timestamp": [timestamps[index] for index in (3, 5, 7)],
+                    "direction": ["long", "short", "long"],
+                    "entry_price": [100.0] * 3,
+                    "stop_price": [99.0] * 3,
+                    "reward_risk": [1.0] * 3,
+                }
+            )
+            with (
+                patch(
+                    "modeling.data.build_features",
+                    return_value=SimpleNamespace(collect=lambda: frame),
+                ),
+                patch("modeling.data.generate_strategy_signals", return_value=signals),
+            ):
+                dataset = build_training_dataset(
+                    [input_path],
+                    style="swing",
+                    strategy="box_breakout",
+                    horizon=1,
+                    sequence_length=2,
+                    cache_dir=root / "cache",
+                )
+            self.assertIsInstance(dataset.features, np.memmap)
+            self.assertIsInstance(dataset.sequences, np.memmap)
+            self.assertEqual(dataset.features.shape, (3, 1))
+            self.assertEqual(dataset.sequences.shape, (3, 2, 1))
+            self.assertEqual(dataset.sequences.dtype, np.float32)
+            self.assertEqual(dataset.timestamps.dtype, np.int64)
+            np.testing.assert_array_equal(
+                dataset.sequences,
+                [
+                    [[20_000.0], [30_000.0]],
+                    [[40_000.0], [50_000.0]],
+                    [[60_000.0], [70_000.0]],
+                ],
+            )
+            with patch("modeling.data.build_features", side_effect=AssertionError):
+                cached = build_training_dataset(
+                    [input_path],
+                    style="swing",
+                    strategy="box_breakout",
+                    horizon=1,
+                    sequence_length=2,
+                    cache_dir=root / "cache",
+                )
+            self.assertIsInstance(cached.sequences, np.memmap)
+            np.testing.assert_array_equal(cached.labels, dataset.labels)
+            del cached, dataset
+
+    def test_raw_cache_finalization_streams_into_valid_npy(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw_path = root / "sequences.bin"
+            output_path = root / "sequences.npy"
+            source = np.arange(60, dtype=np.float32).reshape(5, 3, 4)
+            source.tofile(raw_path)
+
+            _write_npy_from_raw(
+                raw_path,
+                output_path,
+                dtype=np.dtype(np.float32),
+                shape=source.shape,
+                array_name="test sequences",
+            )
+
+            np.testing.assert_array_equal(np.load(output_path), source)
+            self.assertEqual(raw_path.stat().st_size, source.nbytes)
+
     def test_candidate_label_simulates_next_bar_and_target(self):
         bars = [
             {
@@ -158,6 +497,82 @@ class ModelingTests(unittest.TestCase):
         self.assertEqual(result[0], 2)
         self.assertEqual(result[1], bars[2]["timestamp"])
         self.assertAlmostEqual(result[2], 2.0)
+
+    def test_walk_forward_purges_labels_and_reserves_policy_holdout(self):
+        timestamps = tuple(
+            datetime(2024, 1, 1, tzinfo=timezone.utc) + timedelta(days=index // 2)
+            for index in range(120)
+        )
+        ends = tuple(timestamp + timedelta(days=2) for timestamp in timestamps)
+        dataset = TrainingDataset(
+            features=np.zeros((120, 1), dtype=np.float32),
+            sequences=np.zeros((120, 1, 1), dtype=np.float32),
+            labels=np.arange(120) % 3,
+            net_returns_r=np.zeros(120),
+            timestamps=timestamps,
+            label_end_timestamps=ends,
+            feature_names=("feature",),
+            style="swing",
+            strategy="momentum",
+            horizon=2,
+            sequence_length=1,
+        )
+        folds = walk_forward_splits(dataset, folds=3)
+        self.assertEqual(len(folds), 4)
+        self.assertEqual([fold.policy_holdout for fold in folds], [False] * 3 + [True])
+        seen = set()
+        for fold in folds:
+            split = fold.split
+            self.assertTrue(all(ends[index] < split.validation_start for index in split.train))
+            self.assertTrue(all(ends[index] < split.test_start for index in split.validation))
+            self.assertTrue(all(timestamps[index] >= split.test_start for index in split.test))
+            if fold.prediction_end is not None:
+                self.assertTrue(
+                    all(timestamps[index] < fold.prediction_end for index in split.test)
+                )
+            indices = set(split.test.tolist())
+            self.assertFalse(seen & indices)
+            seen.update(indices)
+        self.assertEqual(
+            folds[-1].split.test_start,
+            datetime(2024, 2, 21, tzinfo=timezone.utc),
+        )
+
+        cached = TrainingDataset(
+            **{
+                **dataset.__dict__,
+                "timestamps": np.asarray(
+                    [int(timestamp.timestamp()) * 1_000_000_000 for timestamp in timestamps],
+                    dtype=np.int64,
+                ),
+                "label_end_timestamps": np.asarray(
+                    [int(end.timestamp()) * 1_000_000_000 for end in ends],
+                    dtype=np.int64,
+                ),
+            }
+        )
+        for memory_fold, cached_fold in zip(folds, walk_forward_splits(cached, folds=3)):
+            np.testing.assert_array_equal(memory_fold.split.train, cached_fold.split.train)
+            np.testing.assert_array_equal(memory_fold.split.validation, cached_fold.split.validation)
+            np.testing.assert_array_equal(memory_fold.split.test, cached_fold.split.test)
+
+    def test_walk_forward_rejects_empty_purged_periods(self):
+        timestamps = tuple(datetime(2024, 1, 1) + timedelta(days=i) for i in range(40))
+        dataset = TrainingDataset(
+            features=np.zeros((40, 1), dtype=np.float32),
+            sequences=np.zeros((40, 1, 1), dtype=np.float32),
+            labels=np.arange(40) % 3,
+            net_returns_r=np.zeros(40),
+            timestamps=timestamps,
+            label_end_timestamps=tuple(t + timedelta(days=100) for t in timestamps),
+            feature_names=("feature",),
+            style="swing",
+            strategy="momentum",
+            horizon=100,
+            sequence_length=1,
+        )
+        with self.assertRaisesRegex(ValueError, "empty after purging"):
+            walk_forward_splits(dataset)
 
     def test_chronological_split_purges_labels_crossing_boundaries(self):
         timestamps = tuple(
@@ -291,7 +706,15 @@ class ModelingTests(unittest.TestCase):
         )
         self.assertEqual(train_args.models, "all")
         self.assertEqual(control_args.action, "pause")
-        self.assertEqual(hybrid_args.minimum_win_probability, 0.45)
+        self.assertEqual(hybrid_args.minimum_win_probability, 0.22)
+        self.assertFalse(hybrid_args.legacy_hybrid_filter)
+        backtest_args = parser.parse_args([
+            "backtest", "--input", "prices.csv", "--style", "swing",
+            "--strategy", "box_breakout", "--legacy-hybrid-filter",
+            "--minimum-win-probability", "0.45",
+        ])
+        self.assertTrue(backtest_args.legacy_hybrid_filter)
+        self.assertEqual(backtest_args.minimum_win_probability, 0.45)
 
         catalog_args = parser.parse_args(
             [
@@ -337,6 +760,11 @@ class ModelingTests(unittest.TestCase):
                 output_path=root / "plan.json",
             )
             saved = json.loads(output.read_text(encoding="utf-8"))
+            selected = build_training_batch_plan(
+                stock_data_dir=stock_data,
+                run_root=root / "retry",
+                intervals=["20m", "trading_week"],
+            )
 
         self.assertEqual(plan["status"], "planned")
         self.assertEqual(plan["format_version"], 3)
@@ -361,10 +789,10 @@ class ModelingTests(unittest.TestCase):
                 for group in plan["groups"]
             )
         )
-        self.assertIn("may exceed available system memory", plan["execution_warning"])
+        self.assertIn("feature-engineered in memory", plan["execution_warning"])
         self.assertEqual(len({job["run_dir"] for job in jobs}), len(jobs))
         self.assertEqual(plan["model_stages"], ["xgboost", "lstm", "hybrid_calibration"])
-        self.assertEqual(plan["execution_order"].split(":")[0], "stage-major")
+        self.assertEqual(plan["execution_order"].split(":")[0], "job-major")
         self.assertEqual(plan["job_count"], len(jobs))
         self.assertEqual(plan["total_steps"], len(steps))
         self.assertEqual(
@@ -380,6 +808,11 @@ class ModelingTests(unittest.TestCase):
             ["hybrid_calibration"] * len(jobs),
         )
         self.assertEqual(saved["job_count"], len(jobs))
+        self.assertEqual(selected["job_count"], 8)
+        self.assertEqual(
+            {group["interval"] for group in selected["groups"]},
+            {"20m", "trading_week"},
+        )
 
     def test_batch_plan_refuses_to_overwrite_existing_plan(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -398,7 +831,7 @@ class ModelingTests(unittest.TestCase):
                 write_training_batch_plan(plan, output_path=output)
             self.assertEqual(output.read_text(encoding="utf-8"), "existing")
 
-    def test_batch_trainer_runs_multiple_jobs_concurrently(self):
+    def test_batch_trainer_processes_pooled_jobs_sequentially(self):
         from unittest.mock import patch
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -522,7 +955,7 @@ class ModelingTests(unittest.TestCase):
                 )
 
             self.assertEqual(result["status"], "completed")
-            self.assertEqual(peak_active, 2)
+            self.assertEqual(peak_active, 1)
 
     def test_batch_planning_cli_is_available_without_running_training(self):
         args = build_parser().parse_args(["plan-training-batch"])
@@ -532,6 +965,31 @@ class ModelingTests(unittest.TestCase):
             "data\\models\\batch-plans\\all-timeframes-pooled.json",
         )
         self.assertIsNone(args.symbols)
+
+    def test_batch_reports_skipped_jobs_as_completed_with_failures(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plan_path = root / "plan.json"
+            plan_path.write_text(json.dumps({
+                "format_version": 3, "training_started": False,
+                "model_stages": ["xgboost", "lstm", "hybrid_calibration"],
+                "run_root": str(root / "run"), "job_count": 1,
+                "groups": [{
+                    "style": "intraday", "interval": "1h",
+                    "strategies": ["momentum"], "input_files": ["fixture.csv"],
+                    "job_count": 1,
+                }],
+            }), encoding="utf-8")
+            with patch("modeling.batch_trainer._process_batch_job", return_value="skipped") as process:
+                state = run_training_batch(plan_path=plan_path, run_root=root / "run")
+                self.assertEqual(state["status"], "completed_with_failures")
+                self.assertEqual(state["failed_jobs"], 1)
+                self.assertEqual(process.call_count, 3)
+                resumed = run_training_batch(
+                    plan_path=plan_path, run_root=root / "run", resume=True
+                )
+                self.assertEqual(resumed["status"], "completed_with_failures")
+                self.assertEqual(process.call_count, 3)
 
     def test_batch_trainer_runs_xgboost_then_lstm_then_hybrid(self):
         from unittest.mock import patch
@@ -648,40 +1106,18 @@ class ModelingTests(unittest.TestCase):
                     xgboost_rounds=1,
                     lstm_epochs=1,
                 )
-                self.assertEqual(second["status"], "paused_at_job_limit")
-                self.assertEqual(second["stage_index"], 1)
-                self.assertEqual(second["job_index"], 1)
-
-                third = run_training_batch(
-                    plan_path=plan_path,
-                    run_root=root / "runs",
-                    resume=True,
-                    max_jobs_per_stage=1,
-                    sequence_length=3,
-                    xgboost_rounds=1,
-                    lstm_epochs=1,
-                )
-                self.assertEqual(third["status"], "paused_at_job_limit")
-                self.assertEqual(third["stage_index"], 2)
-                self.assertEqual(third["job_index"], 1)
-
-                result = run_training_batch(
-                    plan_path=plan_path,
-                    run_root=root / "runs",
-                    resume=True,
-                    max_jobs_per_stage=1,
-                    sequence_length=3,
-                    xgboost_rounds=1,
-                    lstm_epochs=1,
-                )
+                self.assertEqual(second["status"], "completed")
+                self.assertEqual(second["stage_index"], 0)
+                self.assertEqual(second["job_index"], 2)
+                result = second
 
             self.assertEqual(result["status"], "completed")
             self.assertEqual(
                 calls,
                 [
                     "xgboost",
-                    "xgboost",
                     "lstm",
+                    "xgboost",
                     "lstm",
                     "xgboost",
                     "lstm",

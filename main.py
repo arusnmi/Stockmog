@@ -29,8 +29,13 @@ from modeling.batch_plan import (
     write_training_batch_plan,
 )
 from modeling.batch_trainer import run_training_batch
-from modeling.data import build_training_dataset, chronological_split
-from modeling.hybrid import predict_hybrid_signals
+from modeling.data import (
+    build_training_dataset,
+    chronological_split,
+    training_feature_statistics,
+)
+from modeling.hybrid import DEFAULT_MINIMUM_WIN_PROBABILITY, predict_hybrid_signals
+from modeling.walk_forward_scores import WalkForwardScoreConfig, create_walk_forward_scores
 from modeling.training import (
     TrainingStopped,
     calibrate_hybrid,
@@ -262,6 +267,7 @@ def cmd_backtest(args: argparse.Namespace) -> None:
                     signals,
                     model_dir=model_dir,
                     minimum_win_probability=args.minimum_win_probability,
+                    require_return_and_low_uncertainty=args.legacy_hybrid_filter,
                 )
             signals_by_strategy[strategy].append(signals)
 
@@ -453,9 +459,7 @@ def cmd_train_models(args: argparse.Namespace) -> None:
         validation_fraction=args.validation_fraction,
         test_fraction=args.test_fraction,
     )
-    mean = dataset.features[split.train].mean(axis=0).astype(np.float32)
-    scale = dataset.features[split.train].std(axis=0).astype(np.float32)
-    scale[scale < 1e-8] = 1.0
+    mean, scale, observed = training_feature_statistics(dataset.features[split.train])
     metadata = {
         "format_version": 1,
         "style": dataset.style,
@@ -477,6 +481,12 @@ def cmd_train_models(args: argparse.Namespace) -> None:
         "test_start": split.test_start.isoformat(),
         "input_fingerprint": manifest["inputs"],
     }
+    if any(
+        Path(path).name.lower() in {"trading_week.csv", "trading_week.csv.gz"}
+        for path in args.inputs
+    ):
+        metadata["optional_missing_features"] = ["ema_200"]
+        metadata["observed_features"] = observed.tolist()
     if manifest_path.exists():
         saved_metadata = json.loads((run_dir / "metadata.json").read_text(encoding="utf-8"))
         if saved_metadata != metadata:
@@ -668,6 +678,7 @@ def cmd_plan_training_batch(args: argparse.Namespace) -> None:
         stock_data_dir=args.stock_data_dir,
         run_root=args.run_root,
         symbols=args.symbols,
+        intervals=args.intervals,
     )
     output_path = write_training_batch_plan(
         plan,
@@ -716,12 +727,119 @@ def cmd_train_batch(args: argparse.Namespace) -> None:
         lstm_epochs=args.lstm_epochs,
         lstm_patience=args.lstm_patience,
         batch_size=args.batch_size,
+        max_events_per_file=args.max_events_per_file or None,
     )
     print(f"Batch status: {result['status']}")
     print(
         f"Next stage/job: {result['stage_index']}/"
         f"{result['job_index']}; failed jobs: {result['failed_jobs']}"
     )
+
+
+def cmd_walk_forward_scores(args: argparse.Namespace) -> None:
+    config = WalkForwardScoreConfig(
+        folds=args.folds,
+        warmup_fraction=args.warmup_fraction,
+        holdout_fraction=args.holdout_fraction,
+        validation_fraction=args.validation_fraction,
+        sequence_length=args.sequence_length,
+        event_stride=args.event_stride,
+        xgboost_rounds=args.xgboost_rounds,
+        xgboost_patience=args.xgboost_patience,
+        lstm_epochs=args.lstm_epochs,
+        lstm_patience=args.lstm_patience,
+        batch_size=args.batch_size,
+        seed=args.seed,
+        score_batch_size=args.score_batch_size,
+    )
+    create_walk_forward_scores(
+        plan_path=args.plan,
+        output_root=args.output,
+        config=config,
+        costs=ExecutionCosts(
+            commission_bps=args.commission_bps,
+            other_fees_bps=args.other_fees_bps,
+            slippage_bps=args.slippage_bps,
+        ),
+    )
+    print(f"Walk-forward scores saved under {Path(args.output).resolve()}")
+
+
+def cmd_train_rl_agent(args: argparse.Namespace) -> None:
+    from modeling.rl_training import RLTrainingConfig, train_rl_policies
+
+    config = RLTrainingConfig(
+        timesteps_per_episode=args.timesteps_per_episode,
+        rollout_steps=args.rollout_steps,
+        batch_size=args.batch_size,
+        learning_rate=args.learning_rate,
+        gamma=args.gamma,
+        seed=args.seed,
+        lookback=args.lookback,
+        initial_cash=args.initial_cash,
+        exposure_fraction=args.exposure_fraction,
+        max_drawdown=args.max_drawdown,
+        invalid_action_penalty=args.invalid_action_penalty,
+        device=args.device,
+    )
+    run = train_rl_policies(
+        scores_root=args.scores,
+        output_root=args.output,
+        config=config,
+        costs=ExecutionCosts(
+            commission_bps=args.commission_bps,
+            other_fees_bps=args.other_fees_bps,
+            slippage_bps=args.slippage_bps,
+        ),
+        resume=args.resume,
+    )
+    print(f"RL training status: {run['status']}")
+    print(f"Completed policy jobs: {len(run['completed_jobs'])}")
+    print(f"RL artifacts: {Path(args.output).resolve()}")
+
+
+def cmd_evaluate_rl_agent(args: argparse.Namespace) -> None:
+    from modeling.rl_evaluation import evaluate_rl_policies
+
+    summary = evaluate_rl_policies(
+        scores_root=args.scores,
+        policies_root=args.policies,
+        output_root=args.output,
+        resume=args.resume,
+    )
+    overall = summary["overall"]
+    print(f"Holdout evaluation status: {summary['status']}")
+    print(
+        f"Aggregate P/L: {overall['profit_loss']} "
+        f"({overall['profit_loss_percent']}%) across "
+        f"{overall['episode_count']} symbol episodes"
+    )
+    print(f"Detailed results: {Path(args.output).resolve() / 'holdout-results.csv'}")
+
+
+def cmd_compare_hybrid_models(args: argparse.Namespace) -> None:
+    from modeling.hybrid_comparison import compare_hybrid_models
+
+    summary = compare_hybrid_models(
+        model_roots=args.model_roots,
+        stock_data_root=args.stock_data_dir,
+        output_root=args.output,
+        symbols=args.symbols,
+        intervals=args.intervals,
+        score_batch_size=args.score_batch_size,
+        resume=args.resume,
+    )
+    print(
+        f"Compared {summary['evaluated_count']} symbol-model episodes; "
+        f"{summary['insufficient_test_bars']} lacked enough test bars."
+    )
+    for mode, totals in summary["totals"].items():
+        print(
+            f"{mode}: P/L {totals['profit_loss']} "
+            f"({totals['profit_loss_percent']}%), "
+            f"{totals['closed_trades']} closed trades"
+        )
+    print(f"Report: {Path(args.output).resolve() / 'comparison-summary.json'}")
 
 
 def cmd_hybrid_signals(args: argparse.Namespace) -> None:
@@ -749,6 +867,7 @@ def cmd_hybrid_signals(args: argparse.Namespace) -> None:
         signals,
         model_dir=args.model_dir,
         minimum_win_probability=args.minimum_win_probability,
+        require_return_and_low_uncertainty=args.legacy_hybrid_filter,
     )
     output = (
         Path(args.output)
@@ -933,7 +1052,14 @@ def build_parser() -> argparse.ArgumentParser:
             "the parent containing one model directory per strategy"
         ),
     )
-    backtest.add_argument("--minimum-win-probability", type=float, default=0.45)
+    backtest.add_argument(
+        "--minimum-win-probability", type=float, default=DEFAULT_MINIMUM_WIN_PROBABILITY,
+    )
+    backtest.add_argument(
+        "--legacy-hybrid-filter",
+        action="store_true",
+        help="Also require positive expected return and combined uncertainty at most 0.95",
+    )
     backtest.set_defaults(func=cmd_backtest)
 
     train_models = subparsers.add_parser(
@@ -1028,6 +1154,12 @@ def build_parser() -> argparse.ArgumentParser:
             "pooled together for each timeframe and strategy"
         ),
     )
+    plan_training_batch.add_argument(
+        "--intervals",
+        nargs="+",
+        choices=("1m", "5m", "15m", "20m", "30m", "1h", "1d", "2d", "trading_week"),
+        help="Limit the plan to selected timeframes",
+    )
     plan_training_batch.set_defaults(func=cmd_plan_training_batch)
 
     train_batch = subparsers.add_parser(
@@ -1051,7 +1183,7 @@ def build_parser() -> argparse.ArgumentParser:
     train_batch.add_argument(
         "--max-jobs-per-stage",
         type=int,
-        help="Stop after this many jobs per stage; rerun with --resume to continue",
+        help="Stop after this many complete pooled jobs; rerun with --resume to continue",
     )
     train_batch.add_argument(
         "--allow-large-batch",
@@ -1070,7 +1202,112 @@ def build_parser() -> argparse.ArgumentParser:
     train_batch.add_argument("--lstm-epochs", type=int, default=40)
     train_batch.add_argument("--lstm-patience", type=int, default=8)
     train_batch.add_argument("--batch-size", type=int, default=32)
+    train_batch.add_argument(
+        "--max-events-per-file",
+        type=int,
+        default=400,
+        help=(
+            "Evenly sample at most this many strategy events per input file to "
+            "bound cache size (0 = keep all; may need hundreds of GiB for 1m)"
+        ),
+    )
     train_batch.set_defaults(func=cmd_train_batch)
+
+    walk_forward_scores = subparsers.add_parser(
+        "walk-forward-scores",
+        help="Fit chronological fold models and score all candidates in a training plan",
+    )
+    walk_forward_scores.add_argument(
+        "--plan", default="data\\models\\batch-plans\\all-timeframes-pooled-canonical.json",
+    )
+    walk_forward_scores.add_argument(
+        "--output", default="data\\models\\rl-walk-forward-scores",
+        help="New output directory; an existing directory is never overwritten",
+    )
+    walk_forward_scores.add_argument("--folds", type=int, default=3)
+    walk_forward_scores.add_argument("--warmup-fraction", type=float, default=0.5)
+    walk_forward_scores.add_argument("--holdout-fraction", type=float, default=0.15)
+    walk_forward_scores.add_argument("--validation-fraction", type=float, default=0.2)
+    walk_forward_scores.add_argument("--sequence-length", type=int, default=60)
+    walk_forward_scores.add_argument(
+        "--event-stride", type=int, default=1,
+        help="Keep every Nth candidate for fold fitting (1 keeps all); scores include all candidates",
+    )
+    walk_forward_scores.add_argument("--xgboost-rounds", type=int, default=500)
+    walk_forward_scores.add_argument("--xgboost-patience", type=int, default=30)
+    walk_forward_scores.add_argument("--lstm-epochs", type=int, default=40)
+    walk_forward_scores.add_argument("--lstm-patience", type=int, default=8)
+    walk_forward_scores.add_argument("--batch-size", type=int, default=32)
+    walk_forward_scores.add_argument("--score-batch-size", type=int, default=2048)
+    walk_forward_scores.add_argument("--seed", type=int, default=42)
+    walk_forward_scores.add_argument("--commission-bps", type=float, default=3.0)
+    walk_forward_scores.add_argument("--other-fees-bps", type=float, default=7.0)
+    walk_forward_scores.add_argument("--slippage-bps", type=float, default=5.0)
+    walk_forward_scores.set_defaults(func=cmd_walk_forward_scores)
+
+    train_rl = subparsers.add_parser(
+        "train-rl-agent",
+        help="Train masked PPO policies from completed walk-forward scores",
+    )
+    train_rl.add_argument("--scores", default="data\\models\\rl-walk-forward-scores")
+    train_rl.add_argument("--output", default="data\\models\\rl-policies")
+    train_rl.add_argument(
+        "--resume", action="store_true",
+        help="Resume at the last saved symbol/fold checkpoint",
+    )
+    train_rl.add_argument("--timesteps-per-episode", type=int, default=2048)
+    train_rl.add_argument("--rollout-steps", type=int, default=256)
+    train_rl.add_argument("--batch-size", type=int, default=64)
+    train_rl.add_argument("--learning-rate", type=float, default=3e-4)
+    train_rl.add_argument("--gamma", type=float, default=0.99)
+    train_rl.add_argument("--seed", type=int, default=42)
+    train_rl.add_argument("--lookback", type=int, default=20)
+    train_rl.add_argument("--initial-cash", type=float, default=50_000.0)
+    train_rl.add_argument("--exposure-fraction", type=float, default=0.1)
+    train_rl.add_argument("--max-drawdown", type=float, default=0.5)
+    train_rl.add_argument("--invalid-action-penalty", type=float, default=0.001)
+    train_rl.add_argument("--device", default="auto", help="PPO device: auto, cpu, or cuda")
+    train_rl.add_argument("--commission-bps", type=float, default=3.0)
+    train_rl.add_argument("--other-fees-bps", type=float, default=7.0)
+    train_rl.add_argument("--slippage-bps", type=float, default=5.0)
+    train_rl.set_defaults(func=cmd_train_rl_agent)
+
+    evaluate_rl = subparsers.add_parser(
+        "evaluate-rl-agent",
+        help="Evaluate completed PPO policies on reserved holdout folds",
+    )
+    evaluate_rl.add_argument("--scores", default="data\\models\\rl-walk-forward-scores")
+    evaluate_rl.add_argument("--policies", default="data\\models\\rl-policies")
+    evaluate_rl.add_argument("--output", default="data\\models\\rl-holdout-evaluation")
+    evaluate_rl.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume holdout evaluation from completed symbol results",
+    )
+    evaluate_rl.set_defaults(func=cmd_evaluate_rl_agent)
+
+    compare_hybrid = subparsers.add_parser(
+        "compare-hybrid-models",
+        help="Compare saved hybrid filters on historical test periods with Backtrader",
+    )
+    compare_hybrid.add_argument(
+        "--model-roots", nargs="+", required=True,
+        help="Completed batch-run directories containing saved hybrid models",
+    )
+    compare_hybrid.add_argument(
+        "--stock-data-dir", required=True,
+        help="Root containing the original minute and day per-symbol input files",
+    )
+    compare_hybrid.add_argument(
+        "--output", required=True, help="Separate comparison output directory",
+    )
+    compare_hybrid.add_argument("--symbols", nargs="+", help="Optional pilot symbol filter")
+    compare_hybrid.add_argument("--intervals", nargs="+", help="Optional timeframe filter")
+    compare_hybrid.add_argument("--score-batch-size", type=int, default=1024)
+    compare_hybrid.add_argument(
+        "--resume", action="store_true", help="Resume at completed symbol checkpoints",
+    )
+    compare_hybrid.set_defaults(func=cmd_compare_hybrid_models)
 
     hybrid_signals = subparsers.add_parser(
         "hybrid-signals",
@@ -1088,8 +1325,13 @@ def build_parser() -> argparse.ArgumentParser:
     hybrid_signals.add_argument(
         "--minimum-win-probability",
         type=float,
-        default=0.45,
+        default=DEFAULT_MINIMUM_WIN_PROBABILITY,
         help="Minimum calibrated profitable-outcome probability for an accepted signal",
+    )
+    hybrid_signals.add_argument(
+        "--legacy-hybrid-filter",
+        action="store_true",
+        help="Also require positive expected return and combined uncertainty at most 0.95",
     )
     hybrid_signals.add_argument("--output", help="Accepted signal CSV destination")
     hybrid_signals.set_defaults(func=cmd_hybrid_signals)

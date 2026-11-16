@@ -58,6 +58,7 @@ def build_training_batch_plan(
     stock_data_dir: str | Path,
     run_root: str | Path,
     symbols: list[str] | tuple[str, ...] | None = None,
+    intervals: list[str] | tuple[str, ...] | None = None,
 ) -> TrainingBatchPlan:
     data_root = Path(stock_data_dir).resolve()
     model_root = Path(run_root).resolve()
@@ -71,6 +72,12 @@ def build_training_batch_plan(
     )
     if requested_symbols is not None and not requested_symbols:
         raise ValueError("At least one training symbol must be selected")
+    requested_intervals = set(intervals) if intervals is not None else None
+    supported_intervals = set(_INTRADAY_INTERVALS + _SWING_INTERVALS)
+    if requested_intervals is not None and (
+        not requested_intervals or requested_intervals - supported_intervals
+    ):
+        raise ValueError("Select at least one supported training interval")
 
     groups: list[BatchGroup] = []
     for style, split, intervals in (
@@ -79,6 +86,8 @@ def build_training_batch_plan(
     ):
         strategies = list(STRATEGIES)
         for interval in intervals:
+            if requested_intervals is not None and interval not in requested_intervals:
+                continue
             split_root = data_root / split
             if not split_root.is_dir():
                 continue
@@ -125,16 +134,15 @@ def build_training_batch_plan(
             "and interval; symbols are not represented as a model dimension."
         ),
         "execution_warning": (
-            "This plan covers all discovered input files, but training currently "
-            "materializes pooled event sequences in RAM. The complete dataset "
-            "may exceed available system memory; do not launch the full plan "
-            "until data preparation and training are made memory-bounded."
+            "Pooled event arrays are cached on disk and LSTM batches are loaded "
+            "on demand. A single input CSV is still feature-engineered in memory; "
+            "check available disk space and run a representative pilot first."
         ),
         "input_file_count": sum(len(group["input_files"]) for group in groups),
         "model_stages": list(_MODEL_STAGES),
         "execution_order": (
-            "stage-major: finish every XGBoost job, then every LSTM job, then "
-            "calibrate each XGBoost/LSTM hybrid"
+            "job-major: build/cache one pooled dataset, train XGBoost and LSTM, "
+            "calibrate the hybrid, then remove that job's dataset cache"
         ),
         "groups": groups,
         "strategy_count": len(STRATEGIES),

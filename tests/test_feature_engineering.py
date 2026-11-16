@@ -60,6 +60,69 @@ def _write_daily_csv(path: Path, *, days: int = 30) -> None:
 
 
 class FeatureEngineeringTests(unittest.TestCase):
+    def test_long_intraday_timeframes_use_available_prior_session_bars(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            for name, bars, box, volume in (
+                ("20m.csv", 19, 8, 10),
+                ("30m.csv", 13, 5, 6),
+                ("1h.csv", 7, 3, 3),
+            ):
+                path = root / name
+                _write_intraday_csv(path, days=2, bars_per_day=bars)
+                frame = build_features(path, style="intraday").collect()
+                self.assertIsNone(frame["box_high"][box - 1])
+                self.assertIsNotNone(frame["box_high"][box])
+                self.assertIsNone(frame["relative_volume"][volume - 1])
+                self.assertIsNotNone(frame["relative_volume"][volume])
+                self.assertIsNone(frame["box_high"][bars])
+                self.assertIsNone(frame["relative_volume"][bars])
+
+    def test_build_features_ignores_precomputed_and_ordered_input_extras(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            input_path = root / "plain.csv"
+            enriched_path = root / "with-old-indicators.csv"
+            _write_daily_csv(input_path)
+
+            source = pl.read_csv(input_path).with_columns(
+                pl.lit(999.0).alias("sma_20"),
+                pl.lit(None, dtype=pl.String).alias("sma_50"),
+                pl.lit(999.0).alias("bb_width_pct"),
+                pl.lit(5).alias("expected_trading_days"),
+                pl.lit(True).alias("is_partial"),
+            )
+            source.select(
+                "expected_trading_days",
+                "sma_50",
+                "close",
+                "timestamp",
+                "is_partial",
+                "volume",
+                "open",
+                "bb_width_pct",
+                "low",
+                "sma_20",
+                "high",
+            ).write_csv(enriched_path)
+
+            plain_features = build_features(input_path, style="swing").collect()
+            enriched_features = build_features(
+                enriched_path,
+                style="swing",
+            ).collect()
+
+            self.assertEqual(plain_features.columns, enriched_features.columns)
+            self.assertTrue(plain_features.equals(enriched_features))
+            for name in (
+                "sma_20",
+                "sma_50",
+                "bb_width_pct",
+                "expected_trading_days",
+                "is_partial",
+            ):
+                self.assertNotIn(name, enriched_features.columns)
+
     def test_intraday_features_are_session_aware_and_lagged(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

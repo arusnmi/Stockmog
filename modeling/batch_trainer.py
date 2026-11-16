@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import gc
 import hashlib
-import itertools
 import json
 import os
-from concurrent.futures import ThreadPoolExecutor
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
@@ -22,6 +21,7 @@ from .data import (
     TrainingDataset,
     build_training_dataset,
     chronological_split,
+    training_feature_statistics,
 )
 from .training import (
     TrainingStopped,
@@ -33,7 +33,7 @@ from .training import (
     train_xgboost,
 )
 
-_BATCH_FORMAT_VERSION = 2
+_BATCH_FORMAT_VERSION = 4
 _BYTES_PER_GIB = 1024**3
 _WORKER_MEMORY_GIB = 4
 _RESERVED_MEMORY_GIB = 2
@@ -160,10 +160,12 @@ def _release_lock(path: Path, process_id: int) -> None:
 def _build_dataset_for_job(
     job: TrainingJob,
     *,
+    cache_dir: Path,
     sequence_length: int,
     validation_fraction: float,
     test_fraction: float,
     costs: ExecutionCosts,
+    max_events_per_file: int | None = None,
 ) -> tuple[TrainingDataset, DatasetSplit]:
     horizon = 12 if job["style"] == "intraday" else 10
     dataset = build_training_dataset(
@@ -173,6 +175,8 @@ def _build_dataset_for_job(
         horizon=horizon,
         sequence_length=sequence_length,
         costs=costs,
+        cache_dir=cache_dir,
+        max_events_per_file=max_events_per_file,
     )
     split = chronological_split(
         dataset,
@@ -215,7 +219,7 @@ def _save_job_metadata(
         if existing != manifest:
             raise ValueError(
                 f"Input or dataset metadata changed since this job was started: "
-                f"{job['symbol']} {job['interval']} {job['strategy']}"
+                f"{job['universe']} {job['interval']} {job['strategy']}"
             )
         metadata_path = run_dir / "metadata.json"
         if not metadata_path.is_file():
@@ -223,16 +227,14 @@ def _save_job_metadata(
         return
 
     training_features = dataset.features[split.train]
-    mean = np.nanmean(training_features, axis=0).astype(np.float32)
-    scale = np.nanstd(training_features, axis=0).astype(np.float32)
-    scale[~np.isfinite(scale) | (scale < 1e-8)] = 1.0
+    mean, scale, observed = training_feature_statistics(training_features)
     metadata = {
         "format_version": 1,
         "style": dataset.style,
         "strategy": dataset.strategy,
         "feature_names": list(dataset.feature_names),
-        "mean": np.nan_to_num(mean, nan=0.0).tolist(),
-        "scale": np.nan_to_num(scale, nan=1.0).tolist(),
+        "mean": mean.tolist(),
+        "scale": scale.tolist(),
         "sequence_length": dataset.sequence_length,
         "horizon": dataset.horizon,
         "class_names": {
@@ -247,6 +249,9 @@ def _save_job_metadata(
         "test_start": split.test_start.isoformat(),
         "input_fingerprint": {"files": input_fingerprints},
     }
+    if job["interval"] == "trading_week":
+        metadata["optional_missing_features"] = ["ema_200"]
+        metadata["observed_features"] = observed.tolist()
     _write_atomic(metadata_path := run_dir / "metadata.json", metadata)
     _write_atomic(manifest_path, manifest)
 
@@ -337,23 +342,27 @@ def _prepare_for_stage(
     validation_fraction: float,
     test_fraction: float,
     costs: ExecutionCosts,
+    max_events_per_file: int | None = None,
 ) -> tuple[TrainingDataset | None, DatasetSplit | None]:
     job_status_path = run_dir / "batch-job-status.json"
     if job_status_path.is_file():
         job_status = json.loads(job_status_path.read_text(encoding="utf-8"))
         if job_status.get("status") == "failed":
             print(
-                f"Skipping {job['symbol']} {job['interval']} {job['strategy']}: "
+                f"Skipping {job['universe']} {job['interval']} "
+                f"{job['strategy']}: "
                 f"{job_status['error']}"
             )
             return None, None
     try:
         dataset, split = _build_dataset_for_job(
             job,
+            cache_dir=run_dir / "dataset-cache",
             sequence_length=sequence_length,
             validation_fraction=validation_fraction,
             test_fraction=test_fraction,
             costs=costs,
+            max_events_per_file=max_events_per_file,
         )
     except (ValueError, FileNotFoundError) as exc:
         _write_atomic(
@@ -366,7 +375,8 @@ def _prepare_for_stage(
             },
         )
         print(
-            f"Skipping {job['symbol']} {job['interval']} {job['strategy']}: {exc}"
+            f"Skipping {job['universe']} {job['interval']} "
+            f"{job['strategy']}: {exc}"
         )
         return None, None
     _save_job_metadata(
@@ -483,6 +493,7 @@ def _process_batch_job(
         validation_fraction=validation_fraction,
         test_fraction=test_fraction,
         costs=costs,
+        max_events_per_file=config.get("max_events_per_file"),
     )
     if dataset is None or split is None:
         return "skipped"
@@ -545,6 +556,7 @@ def run_training_batch(
     lstm_epochs: int = 40,
     lstm_patience: int = 8,
     batch_size: int = 32,
+    max_events_per_file: int | None = 400,
 ) -> dict[str, Any]:
     plan_file = Path(plan_path).resolve()
     if not plan_file.is_file():
@@ -612,6 +624,7 @@ def run_training_batch(
             "lstm_epochs": lstm_epochs,
             "lstm_patience": lstm_patience,
             "batch_size": batch_size,
+            "max_events_per_file": max_events_per_file,
         }
         manifest_path = root / "batch-manifest.json"
         manifest = {
@@ -636,8 +649,11 @@ def run_training_batch(
                     "Use the original plan/settings or a new --run-root."
                 )
             state = json.loads(state_path.read_text(encoding="utf-8"))
-            if state.get("status") == "completed":
-                print("This batch run is already complete.")
+            if state.get("status") in {"completed", "completed_with_failures"}:
+                print(
+                    f"This batch run has finished with {state['failed_jobs']:,} "
+                    "skipped jobs; resuming will not retry them."
+                )
                 return state
         else:
             if resume:
@@ -669,119 +685,87 @@ def run_training_batch(
             state["updated_at"] = datetime.now(timezone.utc).isoformat()
             _write_atomic(state_path, state)
 
-        for stage_index in range(int(state["stage_index"]), len(plan["model_stages"])):
-            stage = plan["model_stages"][stage_index]
+        job_index = int(state["job_index"])
+        stage_index = int(state["stage_index"])
+        jobs_processed = 0
+        while job_index < plan["job_count"]:
+            job = next(iter_planned_jobs(plan, start_index=job_index))
             state["status"] = "running"
             save_state()
-            start_job = int(state["job_index"]) if stage_index == int(state["stage_index"]) else 0
-            jobs_processed = 0
-            job_index = start_job
-            while job_index < plan["job_count"]:
-                workers = _available_worker_count()
-                if stage in {"xgboost", "hybrid_calibration"} and _xgboost_uses_cuda():
-                    workers = 1
-                remaining_cap = (
-                    max_jobs_per_stage - jobs_processed
-                    if max_jobs_per_stage is not None
-                    else workers
+            print(
+                f"Job {job_index + 1:,}/{plan['job_count']:,}: "
+                f"{job['interval']} {job['strategy']} pooled across "
+                f"{len(job['inputs']):,} input files",
+                flush=True,
+            )
+            for current_stage_index in range(stage_index, len(plan["model_stages"])):
+                stage = plan["model_stages"][current_stage_index]
+                state["stage_index"] = current_stage_index
+                state["job_index"] = job_index
+                save_state()
+                print(f"Starting {stage}", flush=True)
+                result = _process_batch_job(
+                    stage,
+                    job=job,
+                    run_root=root,
+                    sequence_length=sequence_length,
+                    validation_fraction=validation_fraction,
+                    test_fraction=test_fraction,
+                    costs=costs,
+                    control=control,
+                    config=config,
                 )
-                window_size = min(
-                    workers,
-                    remaining_cap,
-                    plan["job_count"] - job_index,
-                )
-                jobs = list(
-                    itertools.islice(
-                        iter_planned_jobs(plan, start_index=job_index),
-                        window_size,
-                    )
-                )
-                print(
-                    f"{stage}: running {len(jobs)} job(s) concurrently "
-                    f"(resource limit: {workers} worker(s))",
-                    flush=True,
-                )
-                with ThreadPoolExecutor(max_workers=workers) as executor:
-                    futures = [
-                        executor.submit(
-                            _process_batch_job,
-                            stage,
-                            job=job,
-                            run_root=root,
-                            sequence_length=sequence_length,
-                            validation_fraction=validation_fraction,
-                            test_fraction=test_fraction,
-                            costs=costs,
-                            control=control,
-                            config=config,
-                        )
-                        for job in jobs
-                    ]
-                    results = [future.result() for future in futures]
-
-                completed_count = results.count("completed")
-                state["completed_jobs_by_stage"][stage] += completed_count
-                if stage_index == 0:
-                    state["failed_jobs"] += results.count("skipped")
-                jobs_processed += len(jobs)
-
-                stopped_offset = next(
-                    (
-                        offset
-                        for offset, result in enumerate(results)
-                        if result == "stopped"
-                    ),
-                    None,
-                )
-                if stopped_offset is not None:
-                    state["stage_index"] = stage_index
-                    state["job_index"] = job_index + stopped_offset
+                if result == "completed":
+                    state["completed_jobs_by_stage"][stage] += 1
+                elif result == "skipped" and current_stage_index == 0:
+                    state["failed_jobs"] += 1
+                if result == "stopped":
                     state["status"] = "stopped"
                     save_state()
                     print(
-                        "Batch stopped at model checkpoints. Rerun the same "
+                        "Batch stopped at a model checkpoint. Rerun the same "
                         "command with --resume."
                     )
                     return state
 
-                job_index += len(jobs)
-                if job_index >= plan["job_count"]:
-                    state["stage_index"] = stage_index + 1
-                    state["job_index"] = 0
-                else:
-                    state["stage_index"] = stage_index
-                    state["job_index"] = job_index
+                state["stage_index"] = current_stage_index + 1
                 save_state()
                 if not control.checkpoint_boundary(save_state):
+                    state["stage_index"] = current_stage_index + 1
                     state["status"] = "stopped"
                     save_state()
                     print("Batch stopped. Rerun the same command with --resume.")
                     return state
-                if (
-                    max_jobs_per_stage is not None
-                    and jobs_processed >= max_jobs_per_stage
-                    and state["stage_index"] == stage_index
-                ):
-                    state["status"] = "paused_at_job_limit"
-                    save_state()
-                    print(
-                        f"Reached --max-jobs-per-stage={max_jobs_per_stage} in "
-                        f"{stage}; rerun the same command with --resume."
-                    )
-                    return state
+
+            cache_dir = _job_run_directory(root, job) / "dataset-cache"
+            if cache_dir.exists():
+                shutil.rmtree(cache_dir)
+            job_index += 1
+            stage_index = 0
+            jobs_processed += 1
+            state["job_index"] = job_index
+            state["stage_index"] = stage_index
+            save_state()
+            if (
+                max_jobs_per_stage is not None
+                and jobs_processed >= max_jobs_per_stage
+                and job_index < plan["job_count"]
+            ):
+                state["status"] = "paused_at_job_limit"
+                save_state()
                 print(
-                    f"{stage}: {job_index:,}/{plan['job_count']:,} jobs; "
-                    f"status={state['status']}",
+                    f"Reached --max-jobs-per-stage={max_jobs_per_stage}; "
+                    "rerun with --resume to continue.",
                     flush=True,
                 )
-            state["stage_index"] = stage_index + 1
-            state["job_index"] = 0
-            save_state()
+                return state
 
-        state["status"] = "completed"
+        state["status"] = (
+            "completed_with_failures" if state["failed_jobs"] else "completed"
+        )
         save_state()
         print(
-            f"Batch complete: {sum(state['completed_jobs_by_stage'].values()):,} "
+            f"Batch finished: {sum(state['completed_jobs_by_stage'].values()):,} "
             f"successful stage-jobs; {state['failed_jobs']:,} jobs skipped for "
             f"unusable or missing data."
         )

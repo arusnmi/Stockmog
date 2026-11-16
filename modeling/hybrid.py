@@ -15,6 +15,8 @@ from .training import (
     _xgboost_device,
 )
 
+DEFAULT_MINIMUM_WIN_PROBABILITY = 0.22
+
 
 def _regime(row: dict[str, Any], thresholds: dict[str, Any]) -> str:
     volatility_feature = thresholds.get("volatility_feature")
@@ -39,9 +41,11 @@ def predict_hybrid_signals(
     signals: pl.DataFrame,
     *,
     model_dir: str | Path,
-    minimum_win_probability: float = 0.45,
+    minimum_win_probability: float = DEFAULT_MINIMUM_WIN_PROBABILITY,
+    include_all_candidates: bool = False,
+    require_return_and_low_uncertainty: bool = False,
 ) -> pl.DataFrame:
-    """Score strategy candidates with the calibrated XGBoost/LSTM hybrid."""
+    """Score candidates; optionally retain rejected and unscorable candidates."""
     if not 0.0 <= minimum_win_probability <= 1.0:
         raise ValueError("minimum_win_probability must be between zero and one")
     model_path = Path(model_dir)
@@ -94,6 +98,11 @@ def predict_hybrid_signals(
     }
     mean = np.asarray(metadata["mean"], dtype=np.float32)
     scale = np.asarray(metadata["scale"], dtype=np.float32)
+    observed = np.asarray(
+        metadata.get("observed_features", [True] * len(feature_names)), dtype=bool
+    )
+    if observed.shape != mean.shape:
+        raise ValueError("Model metadata has an invalid observed-feature mask")
     scale[scale < 1e-8] = 1.0
     normalized = np.where(
         np.isfinite(feature_matrix),
@@ -109,13 +118,18 @@ def predict_hybrid_signals(
         index = timestamp_indices.get(candidate["timestamp"])
         if index is None or index + 1 < sequence_length:
             continue
-        if not np.isfinite(feature_matrix[index]).all():
+        finite = np.isfinite(feature_matrix[index])
+        for name in metadata.get("optional_missing_features", []):
+            if name in feature_names:
+                finite[feature_names.index(name)] = True
+        if not finite.all():
             continue
         sequence = feature_matrix[index + 1 - sequence_length : index + 1]
         usable.append(candidate_index)
         sequences.append(sequence)
     if not usable:
-        return signals.head(0).with_columns(
+        result = signals if include_all_candidates else signals.head(0)
+        return result.with_columns(
             pl.lit(None, dtype=pl.Float64).alias("loss_probability"),
             pl.lit(None, dtype=pl.Float64).alias("neutral_probability"),
             pl.lit(None, dtype=pl.Float64).alias("win_probability"),
@@ -123,7 +137,7 @@ def predict_hybrid_signals(
             pl.lit(None, dtype=pl.Float64).alias("return_uncertainty_r"),
             pl.lit(None, dtype=pl.Float64).alias("uncertainty"),
             pl.lit(None, dtype=pl.String).alias("market_regime"),
-            pl.lit(False).alias("accepted"),
+            pl.lit(None if include_all_candidates else False, dtype=pl.Boolean).alias("accepted"),
         )
 
     try:
@@ -136,6 +150,7 @@ def predict_hybrid_signals(
     candidate_features = feature_matrix[
         [timestamp_indices[candidate_rows[index]["timestamp"]] for index in usable]
     ]
+    candidate_features = np.where(np.isfinite(candidate_features), candidate_features, np.nan)
     predicted: dict[str, np.ndarray] = {}
     for model_name, weight in model_weights.items():
         if float(weight) <= 0 or model_name == "lstm":
@@ -176,7 +191,7 @@ def predict_hybrid_signals(
                     candidate_features,
                 )
 
-    if float(model_weights.get("lstm", 0.0)) > 0:
+    if "lstm" in model_weights:
         checkpoint = torch.load(
             model_path / "lstm.pt",
             map_location=device,
@@ -196,6 +211,12 @@ def predict_hybrid_signals(
             np.asarray(metadata["scale"], dtype=np.float32),
         ):
             raise ValueError("LSTM scaling parameters do not match model metadata")
+        checkpoint_observed = np.asarray(
+            checkpoint.get("observed_features", np.ones(len(feature_names), dtype=bool)),
+            dtype=bool,
+        )
+        if not np.array_equal(checkpoint_observed, observed):
+            raise ValueError("LSTM observed-feature mask does not match model metadata")
         network = _build_lstm(torch, len(feature_names)).to(device)
         network.load_state_dict(checkpoint["model_state"])
         network.eval()
@@ -204,6 +225,7 @@ def predict_hybrid_signals(
                 np.stack(sequences),
                 mean=mean,
                 scale=scale,
+                observed=observed,
             )
             lstm_outputs = network(
                 torch.from_numpy(normalized_sequences).to(device)
@@ -267,20 +289,27 @@ def predict_hybrid_signals(
                 ),
                 "accepted": bool(
                     row_probabilities[2] >= minimum_win_probability
-                    and expected_returns_r[row_index] > 0
-                    and combined_uncertainty <= 0.95
+                    and (
+                        not require_return_and_low_uncertainty
+                        or (
+                            expected_returns_r[row_index] > 0
+                            and combined_uncertainty <= 0.95
+                        )
+                    )
                 ),
             }
         )
         scored[candidate_index] = row
 
-    output_rows = [
-        row
-        for row in scored
-        if row is not None and row["win_probability"] >= minimum_win_probability
-        and row["expected_return_r"] > 0
-        and row["uncertainty"] <= 0.95
-    ]
+    if include_all_candidates:
+        output_rows = [
+            row if row is not None else dict(candidate_rows[index])
+            for index, row in enumerate(scored)
+        ]
+    else:
+        output_rows = [
+            row for row in scored if row is not None and row["accepted"]
+        ]
     schema = {
         **signals.schema,
         "loss_probability": pl.Float64,

@@ -1,0 +1,6 @@
+-r requirements.txt
+-r requirements-training.txt
+backtrader==1.9.78.123
+gymnasium>=1.0,<2
+stable-baselines3>=2.9,<3
+sb3-contrib>=2.9,<3

@@ -4,13 +4,25 @@ import json
 import math
 import os
 import shutil
+import time
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from .control import TrainingControl, _replace_with_retry
-from .data import DatasetSplit, TrainingDataset, impute_and_normalize_sequences
+from .data import (
+    DatasetSplit,
+    TrainingDataset,
+    impute_and_normalize_sequences,
+    training_feature_statistics,
+)
+from .eta import (
+    EpochProgress,
+    RoundProgress,
+    benchmark_seconds_per_batch,
+    hardware_summary,
+)
 
 
 class TrainingStopped(RuntimeError):
@@ -329,6 +341,34 @@ def train_xgboost(
         _write_json(state_path, state)
 
     if not state.get("completed"):
+        probe_booster = [None]
+
+        def probe_round() -> None:
+            probe_booster[0] = xgb.train(
+                params,
+                train_matrix,
+                num_boost_round=1,
+                xgb_model=probe_booster[0],
+                verbose_eval=False,
+            )
+            probe_booster[0].predict(validation_matrix)
+
+        seconds_per_round = benchmark_seconds_per_batch(
+            probe_round, warmup=1, measured=3
+        )
+        probe_booster[0] = None
+        progress = RoundProgress(
+            label="XGBoost",
+            total_rounds=max_rounds,
+            estimated_seconds_per_round=seconds_per_round,
+        )
+        print(
+            f"XGBoost input: {len(split.train):,} training / "
+            f"{len(split.validation):,} validation rows x "
+            f"{len(dataset.feature_names)} features on {device}; "
+            f"{progress.describe_estimate(rounds_completed)}",
+            flush=True,
+        )
         for iteration in range(rounds_completed, max_rounds):
             round_params = {**params, "seed": seed + iteration}
             booster = xgb.train(
@@ -356,7 +396,10 @@ def train_xgboost(
                     int(state["rounds_without_improvement"]) + 1
                 )
             save_checkpoint()
-            if (iteration + 1) % 25 == 0:
+            report = progress.round_done(iteration + 1)
+            if report is not None:
+                print(f"{report} | validation log loss {validation_loss:.4f}", flush=True)
+            elif (iteration + 1) % 25 == 0:
                 print(
                     f"XGBoost round {iteration + 1}/{max_rounds}: "
                     f"validation log loss {validation_loss:.4f}"
@@ -428,6 +471,80 @@ def _build_lstm(torch: Any, feature_count: int) -> Any:
     return SmallLSTM()
 
 
+def _estimate_lstm_time(
+    *,
+    torch: Any,
+    device: Any,
+    dataset: TrainingDataset,
+    split: DatasetSplit,
+    mean: np.ndarray,
+    scale: np.ndarray,
+    observed: np.ndarray,
+    return_targets: np.ndarray,
+    epochs: int,
+    batch_size: int,
+) -> EpochProgress:
+    """Time real batches on this machine and project epoch/run duration."""
+    train_count = len(split.train)
+    sample = split.train[: batch_size * 4]
+    batches_per_epoch = math.ceil(train_count / batch_size)
+    with torch.random.fork_rng(
+        devices=[device] if device.type == "cuda" else []
+    ):
+        probe = _build_lstm(torch, len(dataset.feature_names)).to(device)
+        optimizer = torch.optim.AdamW(probe.parameters(), lr=0.001)
+        criterion = torch.nn.CrossEntropyLoss()
+        cursor = [0]
+
+        def step() -> None:
+            start = (cursor[0] * batch_size) % max(1, len(sample))
+            cursor[0] += 1
+            indices = sample[start : start + batch_size]
+            batch_x = torch.from_numpy(
+                impute_and_normalize_sequences(
+                    dataset.sequences[indices], mean=mean, scale=scale,
+                    observed=observed,
+                )
+            ).to(device)
+            labels = torch.from_numpy(
+                dataset.labels[indices].astype(np.int64)
+            ).to(device)
+            optimizer.zero_grad(set_to_none=True)
+            outputs = probe(batch_x)
+            loss = criterion(outputs[:, :3], labels)
+            loss.backward()
+            optimizer.step()
+
+        seconds_per_batch = benchmark_seconds_per_batch(
+            step,
+            synchronize=(
+                (lambda: torch.cuda.synchronize(device))
+                if device.type == "cuda"
+                else (lambda: None)
+            ),
+        )
+        del probe, optimizer
+    # Evaluation is forward-only and uses 8x larger batches.
+    validation_seconds = (
+        len(split.validation) / (batch_size * 8)
+    ) * seconds_per_batch * 8 / 3
+    progress = EpochProgress(
+        label="LSTM",
+        total_epochs=epochs,
+        batches_per_epoch=batches_per_epoch,
+        estimated_seconds_per_batch=seconds_per_batch,
+        estimated_validation_seconds=validation_seconds,
+    )
+    print(
+        f"LSTM input: {train_count:,} training / {len(split.validation):,} "
+        f"validation sequences of {dataset.sequence_length} x "
+        f"{len(dataset.feature_names)}; {hardware_summary(torch, device)}",
+        flush=True,
+    )
+    print(progress.describe_estimate(), flush=True)
+    return progress
+
+
 def train_lstm(
     dataset: TrainingDataset,
     split: DatasetSplit,
@@ -465,14 +582,9 @@ def train_lstm(
             flush=True,
         )
     print(f"LSTM training device: {device}", flush=True)
-    mean = dataset.features[split.train].mean(axis=0).astype(np.float32)
-    scale = dataset.features[split.train].std(axis=0).astype(np.float32)
-    scale[scale < 1e-8] = 1.0
-    normalized_sequences = impute_and_normalize_sequences(
-        dataset.sequences,
-        mean=mean,
-        scale=scale,
-    )
+    train_features = dataset.features[split.train]
+    mean, scale, observed = training_feature_statistics(train_features)
+    del train_features
     model = _build_lstm(torch, len(dataset.feature_names)).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
     criterion = torch.nn.CrossEntropyLoss()
@@ -510,6 +622,7 @@ def train_lstm(
                 "feature_names": list(dataset.feature_names),
                 "mean": mean,
                 "scale": scale,
+                "observed_features": observed,
                 "sequence_length": dataset.sequence_length,
                 "style": dataset.style,
                 "strategy": dataset.strategy,
@@ -546,31 +659,58 @@ def train_lstm(
         save_checkpoint()
 
     train_indices = split.train
-    validation_sequences = torch.from_numpy(
-        normalized_sequences[split.validation]
-    ).to(device)
-    validation_labels = torch.from_numpy(
-        dataset.labels[split.validation].astype(np.int64)
-    ).to(device)
-    validation_returns = torch.from_numpy(
-        return_targets[split.validation].astype(np.float32)
-    ).to(device)
-
-    def evaluate() -> tuple[float, np.ndarray, np.ndarray, np.ndarray]:
+    def evaluate(
+        indices: np.ndarray,
+    ) -> tuple[float, np.ndarray, np.ndarray, np.ndarray]:
         model.eval()
-        with torch.no_grad():
-            outputs = model(validation_sequences)
-            log_variance = outputs[:, 4].clamp(-5.0, 3.0)
-            return_loss = 0.5 * (
-                log_variance
-                + (validation_returns - outputs[:, 3]).square()
-                * torch.exp(-log_variance)
-            ).mean()
-            loss = criterion(outputs[:, :3], validation_labels) + 0.1 * return_loss
-            probabilities = torch.softmax(outputs[:, :3], dim=1).cpu().numpy()
-            expected_returns = outputs[:, 3].clamp(-5.0, 5.0).cpu().numpy()
-            return_uncertainty = torch.exp(0.5 * log_variance).cpu().numpy()
-        return float(loss.item()), probabilities, expected_returns, return_uncertainty
+        probabilities = np.empty((len(indices), 3), dtype=np.float32)
+        expected_returns = np.empty(len(indices), dtype=np.float32)
+        return_uncertainty = np.empty(len(indices), dtype=np.float32)
+        total_loss = 0.0
+        for start in range(0, len(indices), batch_size * 8):
+            batch_indices = indices[start : start + batch_size * 8]
+            batch_x = torch.from_numpy(
+                impute_and_normalize_sequences(
+                    dataset.sequences[batch_indices],
+                    mean=mean,
+                    scale=scale,
+                    observed=observed,
+                )
+            ).to(device)
+            batch_labels = torch.from_numpy(
+                dataset.labels[batch_indices].astype(np.int64)
+            ).to(device)
+            batch_returns = torch.from_numpy(
+                return_targets[batch_indices].astype(np.float32)
+            ).to(device)
+            with torch.no_grad():
+                outputs = model(batch_x)
+                log_variance = outputs[:, 4].clamp(-5.0, 3.0)
+                return_loss = 0.5 * (
+                    log_variance
+                    + (batch_returns - outputs[:, 3]).square()
+                    * torch.exp(-log_variance)
+                ).mean()
+                loss = (
+                    criterion(outputs[:, :3], batch_labels)
+                    + 0.1 * return_loss
+                )
+                probabilities[start : start + len(batch_indices)] = (
+                    torch.softmax(outputs[:, :3], dim=1).cpu().numpy()
+                )
+                expected_returns[start : start + len(batch_indices)] = (
+                    outputs[:, 3].clamp(-5.0, 5.0).cpu().numpy()
+                )
+                return_uncertainty[start : start + len(batch_indices)] = (
+                    torch.exp(0.5 * log_variance).cpu().numpy()
+                )
+                total_loss += float(loss.item()) * len(batch_indices)
+        return (
+            total_loss / len(indices),
+            probabilities,
+            expected_returns,
+            return_uncertainty,
+        )
 
     def memory_report() -> str:
         memory = psutil.virtual_memory()
@@ -597,14 +737,32 @@ def train_lstm(
         else:
             raise RuntimeError("Completed LSTM checkpoint is missing its best model")
     else:
+        progress = _estimate_lstm_time(
+            torch=torch,
+            device=device,
+            dataset=dataset,
+            split=split,
+            mean=mean,
+            scale=scale,
+            observed=observed,
+            return_targets=return_targets,
+            epochs=epochs,
+            batch_size=batch_size,
+        )
         for epoch in range(int(state["epoch"]), epochs):
             model.train()
             permutation = np.random.default_rng(seed + epoch).permutation(train_indices)
             start_offset = int(state["batch_offset"]) if epoch == int(state["epoch"]) else 0
+            progress.start_epoch(start_offset // batch_size)
             for offset in range(start_offset, len(permutation), batch_size):
                 batch_indices = permutation[offset : offset + batch_size]
                 batch_x = torch.from_numpy(
-                    normalized_sequences[batch_indices]
+                    impute_and_normalize_sequences(
+                        dataset.sequences[batch_indices],
+                        mean=mean,
+                        scale=scale,
+                        observed=observed,
+                    )
                 ).to(device)
                 batch_y = torch.from_numpy(
                     dataset.labels[batch_indices].astype(np.int64)
@@ -624,6 +782,7 @@ def train_lstm(
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
+                progress.batch_done(epoch)
                 state["epoch"] = epoch
                 state["batch_offset"] = offset + batch_size
                 if not control.checkpoint_boundary(save_checkpoint):
@@ -631,7 +790,9 @@ def train_lstm(
                 if state["batch_offset"] % (batch_size * 10) == 0:
                     save_checkpoint()
 
-            validation_loss, _, _, _ = evaluate()
+            validation_started = time.perf_counter()
+            validation_loss, _, _, _ = evaluate(split.validation)
+            validation_seconds = time.perf_counter() - validation_started
             if validation_loss < float(state["best_loss"]):
                 state["best_loss"] = validation_loss
                 state["best_epoch"] = epoch + 1
@@ -649,7 +810,9 @@ def train_lstm(
             save_checkpoint()
             print(
                 f"LSTM epoch {epoch + 1}/{epochs}: "
-                f"validation log loss {validation_loss:.4f}; {memory_report()}"
+                f"validation log loss {validation_loss:.4f}; "
+                f"{progress.finish_epoch(epoch, validation_seconds)}; "
+                f"{memory_report()}"
             )
             if int(state["epochs_without_improvement"]) >= patience:
                 break
@@ -666,18 +829,13 @@ def train_lstm(
         validation_probabilities,
         validation_expected_returns,
         validation_return_uncertainty,
-    ) = evaluate()
-    test_sequences = torch.from_numpy(
-        normalized_sequences[split.test]
-    ).to(device)
-    model.eval()
-    with torch.no_grad():
-        test_outputs = model(test_sequences)
-        test_probabilities = torch.softmax(test_outputs[:, :3], dim=1).cpu().numpy()
-        test_expected_returns = test_outputs[:, 3].clamp(-5.0, 5.0).cpu().numpy()
-        test_return_uncertainty = torch.exp(
-            0.5 * test_outputs[:, 4].clamp(-5.0, 3.0)
-        ).cpu().numpy()
+    ) = evaluate(split.validation)
+    (
+        _,
+        test_probabilities,
+        test_expected_returns,
+        test_return_uncertainty,
+    ) = evaluate(split.test)
 
     def return_metrics(
         indices: np.ndarray,

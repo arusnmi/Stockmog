@@ -15,13 +15,19 @@ from .technical_indicators import add_price_features, add_technical_indicators
 
 FeatureStyle = Literal["intraday", "swing"]
 
+_INTRADAY_WINDOWS = {
+    "20m": (8, 10),
+    "30m": (5, 6),
+    "1h": (3, 3),
+}
+
 
 def build_features(
     input_path: str | Path,
     *,
     style: FeatureStyle,
     box_window: int | None = None,
-    relative_volume_window: int = 20,
+    relative_volume_window: int | None = None,
     opening_range_bars: int = 3,
     market_index_path: str | Path | None = None,
     volatility_index_path: str | Path | None = None,
@@ -32,34 +38,48 @@ def build_features(
 
     source = scan_training_csv(input_path)
     columns = set(source.collect_schema().names())
-    frame = source.with_columns(
+    frame = source.select(
         pl.col("timestamp").cast(pl.Datetime("us"), strict=True),
         *(
-            [pl.col("volume").cast(pl.Float64, strict=False)]
-            if "volume" in columns
-            else [pl.lit(None, dtype=pl.Float64).alias("volume")]
+            [pl.col("symbol").cast(pl.String)]
+            if "symbol" in columns
+            else []
         ),
         *[
             pl.col(name).cast(pl.Float64, strict=False)
             for name in ("open", "high", "low", "close")
         ],
+        *(
+            [pl.col("volume").cast(pl.Float64, strict=False)]
+            if "volume" in columns
+            else [pl.lit(None, dtype=pl.Float64).alias("volume")]
+        ),
     ).sort("timestamp")
     frame = frame.with_columns(pl.col("timestamp").dt.date().alias("_session_date"))
     frame = add_price_features(frame)
     frame = add_technical_indicators(frame)
 
     if style == "intraday":
+        name = Path(input_path).name.lower()
+        interval = name[:-7] if name.endswith(".csv.gz") else Path(name).stem
+        default_box, default_volume = _INTRADAY_WINDOWS.get(interval, (12, 20))
         frame = add_intraday_features(
             frame,
-            box_window=box_window if box_window is not None else 12,
-            relative_volume_window=relative_volume_window,
+            box_window=box_window if box_window is not None else default_box,
+            relative_volume_window=(
+                relative_volume_window
+                if relative_volume_window is not None
+                else default_volume
+            ),
             opening_range_bars=opening_range_bars,
         )
     else:
         frame = add_swing_features(
             frame,
             box_window=box_window if box_window is not None else 10,
-            relative_volume_window=relative_volume_window,
+            relative_volume_window=(
+                relative_volume_window if relative_volume_window is not None else 20
+            ),
         )
 
     frame = add_market_context(

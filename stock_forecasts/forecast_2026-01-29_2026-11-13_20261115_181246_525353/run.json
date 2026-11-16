@@ -1,0 +1,30 @@
+{
+  "cutoff": "2026-01-29",
+  "end": "2026-11-13",
+  "clock_ist": "2026-11-15T18:12:46.525353",
+  "latest_actual_date": "2026-11-13",
+  "symbols": [
+    "MUTHOOTMF",
+    "RKSWAMY",
+    "OBEROIRLTY",
+    "SAKAR",
+    "BOSCHLTD"
+  ],
+  "method": "20-session geometric trend, fixed at cutoff; not the saved trading model",
+  "calendar_source": "https://marketholidays.in/api/holidays",
+  "special_sessions": {
+    "2026-02-01": "Union Budget",
+    "2026-11-08": "Muhurat trading"
+  },
+  "price_sources": [
+    "Yahoo Finance",
+    "NSE special-session bhavcopy"
+  ],
+  "compared_stock_days": 980,
+  "mean_absolute_percentage_error": "31.15",
+  "limitations": [
+    "Long-horizon extrapolation is unreliable and not a trading recommendation.",
+    "2026 special sessions are explicitly listed; other years are not supported.",
+    "Historical forecast dates are retrospective and are not an independent prospective test."
+  ]
+}
