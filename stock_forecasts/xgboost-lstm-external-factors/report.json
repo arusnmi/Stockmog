@@ -1,0 +1,2204 @@
+{
+  "status": "partial",
+  "research_only": true,
+  "run": "D:\\stonks\\Stockmog\\data\\models\\nifty-timeframe",
+  "sessions_per_stock": 20,
+  "graph_pdf": "stock_forecast_report.pdf",
+  "stocks": [
+    {
+      "symbol": "ADANIENT",
+      "graph": "graphs\\ADANIENT-835698dc64.png",
+      "series": "series\\ADANIENT-835698dc64.csv",
+      "series_sha256": "c7777487399b7f7d56a4fde8ddcb4ab67d973e0b6b26f1ca6f68054b7333d3b4",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "ADANIPORTS",
+          "update": {
+            "source": "local",
+            "name": "ADANIPORTS",
+            "status": "extended",
+            "yahoo_ticker": "ADANIPORTS.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 43.45553785917466,
+        "rmse": 54.448797448810495,
+        "mape_percent": 1.6480356584790374,
+        "directional_accuracy_percent": 50.0
+      }
+    },
+    {
+      "symbol": "ADANIPORTS",
+      "graph": "graphs\\ADANIPORTS-967b6d6213.png",
+      "series": "series\\ADANIPORTS-967b6d6213.csv",
+      "series_sha256": "cc1affc350eb856fc25bfc6cd863693d570a3a0f84614a947b95b1e535308b7d",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "ADANIENT",
+          "update": {
+            "source": "local",
+            "name": "ADANIENT",
+            "status": "extended",
+            "yahoo_ticker": "ADANIENT.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 26.128325236729314,
+        "rmse": 36.082125879368434,
+        "mape_percent": 1.403825421375055,
+        "directional_accuracy_percent": 65.0
+      }
+    },
+    {
+      "symbol": "APOLLOHOSP",
+      "graph": "graphs\\APOLLOHOSP-1b4300c918.png",
+      "series": "series\\APOLLOHOSP-1b4300c918.csv",
+      "series_sha256": "05a77e77059dea7a98639dd99fab922c08d01cc055e8cb348df7d80d03841f34",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_100:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_100:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX100",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_200:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_200:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX200",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_500:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_500:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CRSLDX",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 108.83614420098861,
+        "rmse": 136.92074543047173,
+        "mape_percent": 1.2959368416476316,
+        "directional_accuracy_percent": 55.00000000000001
+      }
+    },
+    {
+      "symbol": "ASIANPAINT",
+      "graph": "graphs\\ASIANPAINT-3b9f6710da.png",
+      "series": "series\\ASIANPAINT-3b9f6710da.csv",
+      "series_sha256": "76c66e601124a230423fc29e46fbe2417e189486a88701b5f5ad4404b0f0e49e",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_100:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_100:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX100",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_200:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_200:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX200",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 33.11176599805274,
+        "rmse": 41.70845114850544,
+        "mape_percent": 1.3457586575302147,
+        "directional_accuracy_percent": 55.00000000000001
+      }
+    },
+    {
+      "symbol": "AXISBANK",
+      "graph": "graphs\\AXISBANK-1f586ff3b0.png",
+      "series": "series\\AXISBANK-1f586ff3b0.csv",
+      "series_sha256": "7b40b10b422a1ccf8101de9d558153f793ccf266d1e91437a4cd81064e1a1490",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_BANK:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_BANK:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEBANK",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 14.515279029447209,
+        "rmse": 19.12689694408658,
+        "mape_percent": 1.120781715506916,
+        "directional_accuracy_percent": 60.0
+      }
+    },
+    {
+      "symbol": "BAJAJ-AUTO",
+      "graph": "graphs\\BAJAJ-AUTO-974bb5f41b.png",
+      "series": "series\\BAJAJ-AUTO-974bb5f41b.csv",
+      "series_sha256": "ca2cf85fd2104c0b4bec6fc770e2297a654603dec66aac4ffe296b94661318f0",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "HEROMOTOCO",
+          "update": {
+            "source": "local",
+            "name": "HEROMOTOCO",
+            "status": "extended",
+            "yahoo_ticker": "HEROMOTOCO.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 108.80758575747386,
+        "rmse": 131.55275911723356,
+        "mape_percent": 1.0256013442505654,
+        "directional_accuracy_percent": 60.0
+      }
+    },
+    {
+      "symbol": "BAJAJFINSV",
+      "graph": "graphs\\BAJAJFINSV-4c4bcca5dc.png",
+      "series": "series\\BAJAJFINSV-4c4bcca5dc.csv",
+      "series_sha256": "8fae1a46a4d81b0731f88546d40d925dd12de446afa214010d109d605cfea957",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "BAJFINANCE",
+          "update": {
+            "source": "local",
+            "name": "BAJFINANCE",
+            "status": "extended",
+            "yahoo_ticker": "BAJFINANCE.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 25.087268947570372,
+        "rmse": 30.21190379934321,
+        "mape_percent": 1.403938472409292,
+        "directional_accuracy_percent": 35.0
+      }
+    },
+    {
+      "symbol": "BAJFINANCE",
+      "graph": "graphs\\BAJFINANCE-ebf3ecf0f5.png",
+      "series": "series\\BAJFINANCE-ebf3ecf0f5.csv",
+      "series_sha256": "c9f118e960e32f4b093368f3f461e924676ddceaa03f11cd10aa2966f3ff261a",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "BAJAJFINSV",
+          "update": {
+            "source": "local",
+            "name": "BAJAJFINSV",
+            "status": "extended",
+            "yahoo_ticker": "BAJAJFINSV.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 17.142583814581304,
+        "rmse": 23.655415301842904,
+        "mape_percent": 1.6624637240389921,
+        "directional_accuracy_percent": 40.0
+      }
+    },
+    {
+      "symbol": "BEL",
+      "graph": "graphs\\BEL-daff23448f.png",
+      "series": "series\\BEL-daff23448f.csv",
+      "series_sha256": "acb98a7f538ce97b8d5a90fd9fe9932e12a6f8582fbb84f77893a5dae6a98d96",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_MIDCAP_50:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_MIDCAP_50:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEMDCP50",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 4.469216274706173,
+        "rmse": 5.969878304360119,
+        "mape_percent": 1.1574536714555856,
+        "directional_accuracy_percent": 50.0
+      }
+    },
+    {
+      "symbol": "BHARTIARTL",
+      "graph": "graphs\\BHARTIARTL-6e4af0677d.png",
+      "series": "series\\BHARTIARTL-6e4af0677d.csv",
+      "series_sha256": "1b21a7fe210fa988fc0b24a309b5528ee917c55407d8b6a08344266a5a29bd62",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_100:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_100:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX100",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_200:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_200:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX200",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_50:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_50:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEI",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "SENSEX:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "SENSEX:Close",
+            "status": "extended",
+            "yahoo_ticker": "^BSESN",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 23.94793266666604,
+        "rmse": 31.82757054908369,
+        "mape_percent": 1.1675902210539524,
+        "directional_accuracy_percent": 55.00000000000001
+      }
+    },
+    {
+      "symbol": "BPCL",
+      "graph": "graphs\\BPCL-a57d0d218c.png",
+      "series": "series\\BPCL-a57d0d218c.csv",
+      "series_sha256": "0dc857ec14fab3ffdae4ee83c651f63d6a4d35d400b81d95f2de22d61d575cc9",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "IOC",
+          "update": {
+            "source": "local",
+            "name": "IOC",
+            "status": "extended",
+            "yahoo_ticker": "IOC.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 4.849496935849783,
+        "rmse": 5.834481261569057,
+        "mape_percent": 1.6145776472301205,
+        "directional_accuracy_percent": 50.0
+      }
+    },
+    {
+      "symbol": "BRITANNIA",
+      "graph": "graphs\\BRITANNIA-f7ca06d080.png",
+      "series": "series\\BRITANNIA-f7ca06d080.csv",
+      "series_sha256": "2f13d44109533f74c0a5c4d9b1abc2bf14c6e1fcac348b5b84ced1d4abfd9fde",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "HINDUNILVR",
+          "update": {
+            "source": "local",
+            "name": "HINDUNILVR",
+            "status": "extended",
+            "yahoo_ticker": "HINDUNILVR.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 62.353275964897556,
+        "rmse": 98.01158513193626,
+        "mape_percent": 1.3049654157591406,
+        "directional_accuracy_percent": 50.0
+      }
+    },
+    {
+      "symbol": "BSE",
+      "graph": "graphs\\BSE-a44616f05e.png",
+      "series": "series\\BSE-a44616f05e.csv",
+      "series_sha256": "ea3afb1b598a7a2364f57217fa452dc0a8e91a71e75dd43c694caba085cbc23f",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 55.92047770004922,
+        "rmse": 79.17940338948932,
+        "mape_percent": 1.534354981114618,
+        "directional_accuracy_percent": 55.00000000000001
+      }
+    },
+    {
+      "symbol": "CIPLA",
+      "graph": "graphs\\CIPLA-6de812c270.png",
+      "series": "series\\CIPLA-6de812c270.csv",
+      "series_sha256": "d82fe747a97210e2298b3aa98bba41e1d52d18efa450fe04503d4e51097fdfe4",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_PHARMA:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_PHARMA:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNXPHARMA",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 10.14802259747214,
+        "rmse": 12.077617006915892,
+        "mape_percent": 0.7335020517528957,
+        "directional_accuracy_percent": 65.0
+      }
+    },
+    {
+      "symbol": "COALINDIA",
+      "graph": "graphs\\COALINDIA-2fe1e9735c.png",
+      "series": "series\\COALINDIA-2fe1e9735c.csv",
+      "series_sha256": "ef5d487b94275b041f31c51f415d441d7673c05a4a8a0403ad6f3a15235acec7",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_MIDCAP_50:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_MIDCAP_50:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEMDCP50",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 5.219390099842687,
+        "rmse": 6.5889984569472,
+        "mape_percent": 1.306579698884055,
+        "directional_accuracy_percent": 40.0
+      }
+    },
+    {
+      "symbol": "DIVISLAB",
+      "graph": "graphs\\DIVISLAB-c19eef1002.png",
+      "series": "series\\DIVISLAB-c19eef1002.csv",
+      "series_sha256": "3139226eb318bd7c12a2488530896166df4f8b1d3218ba2740b52517562d6a4d",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_PHARMA:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_PHARMA:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNXPHARMA",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 197.81534349399755,
+        "rmse": 330.5561915676217,
+        "mape_percent": 1.8700951839148747,
+        "directional_accuracy_percent": 45.0
+      }
+    },
+    {
+      "symbol": "DRREDDY",
+      "graph": "graphs\\DRREDDY-194fab6ba7.png",
+      "series": "series\\DRREDDY-194fab6ba7.csv",
+      "series_sha256": "e717bb2ede88977a092c8d9ac8528dd05cdcff3ab33171aa2f00f05a3d344c69",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_PHARMA:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_PHARMA:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNXPHARMA",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 12.894454197839286,
+        "rmse": 20.985774995098186,
+        "mape_percent": 0.9635818980555549,
+        "directional_accuracy_percent": 55.00000000000001
+      }
+    },
+    {
+      "symbol": "EICHERMOT",
+      "graph": "graphs\\EICHERMOT-197a5ccfed.png",
+      "series": "series\\EICHERMOT-197a5ccfed.csv",
+      "series_sha256": "3b95f35cff4abfa8060111a3d1fd1d21c57b08402e3ebdb03df0082e3e064376",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_200:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_200:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX200",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_500:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_500:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CRSLDX",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 100.8443500344982,
+        "rmse": 135.05713616103216,
+        "mape_percent": 1.325307498300155,
+        "directional_accuracy_percent": 40.0
+      }
+    },
+    {
+      "symbol": "ETERNAL",
+      "graph": "graphs\\ETERNAL-278d2884f1.png",
+      "series": "series\\ETERNAL-278d2884f1.csv",
+      "series_sha256": "3c24cbc245ed02e436cf31bc79df4b61a345c77f953e5c0244a41f4756ca249c",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 5.55474504662341,
+        "rmse": 6.761372825757527,
+        "mape_percent": 1.6251704207801347,
+        "directional_accuracy_percent": 70.0
+      }
+    },
+    {
+      "symbol": "GRASIM",
+      "graph": "graphs\\GRASIM-2750e8f761.png",
+      "series": "series\\GRASIM-2750e8f761.csv",
+      "series_sha256": "32478b7d6b1054cf1bda0b1a9855f3456c975790594c95d0bceed68c50ce911e",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_200:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_200:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX200",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_500:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_500:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CRSLDX",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 37.980368021682054,
+        "rmse": 46.12854516158907,
+        "mape_percent": 1.2383914184027238,
+        "directional_accuracy_percent": 60.0
+      }
+    },
+    {
+      "symbol": "HCLTECH",
+      "graph": "graphs\\HCLTECH-a31833d488.png",
+      "series": "series\\HCLTECH-a31833d488.csv",
+      "series_sha256": "888c01f15ec52e16cc82a416931399e64191ca10d1f8e5a2cea26fdcff46b331",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_IT:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_IT:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNXIT",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 13.36530375516919,
+        "rmse": 17.24312111954076,
+        "mape_percent": 0.9578152516664354,
+        "directional_accuracy_percent": 45.0
+      }
+    },
+    {
+      "symbol": "HDFCBANK",
+      "graph": "graphs\\HDFCBANK-10014d629a.png",
+      "series": "series\\HDFCBANK-10014d629a.csv",
+      "series_sha256": "a464a5b5204efbd70718b2888a5d7cb11e752c93f3ddbb8bf336641897593eb1",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_BANK:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_BANK:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEBANK",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "local",
+          "name": "HDFC",
+          "update": {
+            "source": "local",
+            "name": "HDFC",
+            "status": "unavailable",
+            "yahoo_ticker": "HDFC.NS",
+            "rows_added": 0,
+            "saved_through": "2023-07-12",
+            "error": "ValueError: No data returned for symbol HDFC.NS with interval 1d."
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 20,
+      "metrics": {
+        "count": 20,
+        "mae": 10.361005806133823,
+        "rmse": 12.616869747158775,
+        "mape_percent": 1.3741038007627382,
+        "directional_accuracy_percent": 40.0
+      }
+    },
+    {
+      "symbol": "HDFCLIFE",
+      "graph": "graphs\\HDFCLIFE-4ac38462d6.png",
+      "series": "series\\HDFCLIFE-4ac38462d6.csv",
+      "series_sha256": "31d0df37db6c054c9380f7c43885e96a6bc8260fad48ea1ed9232c3ecdc2b353",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "SBILIFE",
+          "update": {
+            "source": "local",
+            "name": "SBILIFE",
+            "status": "extended",
+            "yahoo_ticker": "SBILIFE.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 8.263096132374676,
+        "rmse": 10.53457288837446,
+        "mape_percent": 1.4704238783644241,
+        "directional_accuracy_percent": 65.0
+      }
+    },
+    {
+      "symbol": "HEROMOTOCO",
+      "graph": "graphs\\HEROMOTOCO-7b7e6fa67e.png",
+      "series": "series\\HEROMOTOCO-7b7e6fa67e.csv",
+      "series_sha256": "ae7768543b646507f283a086daa7bbe1c26002f31f63816edb6bd6b3deaf8307",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_100:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_100:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX100",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_200:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_200:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX200",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_500:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_500:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CRSLDX",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 86.67996544988746,
+        "rmse": 110.80146669214396,
+        "mape_percent": 1.6307751411840765,
+        "directional_accuracy_percent": 25.0
+      }
+    },
+    {
+      "symbol": "HINDALCO",
+      "graph": "graphs\\HINDALCO-fdf70ccf73.png",
+      "series": "series\\HINDALCO-fdf70ccf73.csv",
+      "series_sha256": "f50a94f8fcfc69b872f8a622e24e4df728f33b687c1c56edf53ab96710a5c1b7",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "TATASTEEL",
+          "update": {
+            "source": "local",
+            "name": "TATASTEEL",
+            "status": "extended",
+            "yahoo_ticker": "TATASTEEL.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 11.207515820267071,
+        "rmse": 14.108496590748302,
+        "mape_percent": 1.2277564717311704,
+        "directional_accuracy_percent": 40.0
+      }
+    },
+    {
+      "symbol": "HINDUNILVR",
+      "graph": "graphs\\HINDUNILVR-0fb0e71ef4.png",
+      "series": "series\\HINDUNILVR-0fb0e71ef4.csv",
+      "series_sha256": "9a52628fc66c7dcaa1b8b7f7e36511bd3b22ed1453a8cd35689ef1f4fd1bd390",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "BRITANNIA",
+          "update": {
+            "source": "local",
+            "name": "BRITANNIA",
+            "status": "extended",
+            "yahoo_ticker": "BRITANNIA.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 22.3290488087119,
+        "rmse": 31.12332676188115,
+        "mape_percent": 1.1361238307092698,
+        "directional_accuracy_percent": 55.00000000000001
+      }
+    },
+    {
+      "symbol": "ICICIBANK",
+      "graph": "graphs\\ICICIBANK-21712f9a2c.png",
+      "series": "series\\ICICIBANK-21712f9a2c.csv",
+      "series_sha256": "e585ea61ddee8882bc0d78edb5c2014c968e3eedc13ed54ddc123bfb2397108b",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_BANK:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_BANK:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEBANK",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 17.767825718221502,
+        "rmse": 26.940506117476744,
+        "mape_percent": 1.1857377049944873,
+        "directional_accuracy_percent": 50.0
+      }
+    },
+    {
+      "symbol": "INDIGO",
+      "graph": "graphs\\INDIGO-835a0fbc69.png",
+      "series": "series\\INDIGO-835a0fbc69.csv",
+      "series_sha256": "f7f55524762223449dcc536e8a89cbd64573b8f86039c9a6687a87f8c7d44647",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_500:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_500:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CRSLDX",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_MIDCAP_50:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_MIDCAP_50:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEMDCP50",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 82.68793721807533,
+        "rmse": 109.78567247721209,
+        "mape_percent": 1.5896008260915633,
+        "directional_accuracy_percent": 55.00000000000001
+      }
+    },
+    {
+      "symbol": "INDUSINDBK",
+      "graph": "graphs\\INDUSINDBK-d7bdee3198.png",
+      "series": "series\\INDUSINDBK-d7bdee3198.csv",
+      "series_sha256": "73fe18211b7bb9a3748b0b8716ef315fc2382c3e77a6746144ce08ed1a564cb6",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_BANK:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_BANK:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEBANK",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 14.674120639813145,
+        "rmse": 18.582453008854266,
+        "mape_percent": 1.657594501776951,
+        "directional_accuracy_percent": 60.0
+      }
+    },
+    {
+      "symbol": "INFY",
+      "graph": "graphs\\INFY-027d3ed07f.png",
+      "series": "series\\INFY-027d3ed07f.csv",
+      "series_sha256": "22ed3afbae9bb89b605de8d2673f2f7a1c3a3e55a9524604288de05dd58d2f35",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_IT:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_IT:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNXIT",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 16.91203823611604,
+        "rmse": 20.754312094391928,
+        "mape_percent": 1.4740973852328805,
+        "directional_accuracy_percent": 50.0
+      }
+    },
+    {
+      "symbol": "IOC",
+      "graph": "graphs\\IOC-d438d5fafe.png",
+      "series": "series\\IOC-d438d5fafe.csv",
+      "series_sha256": "0a5d513a26e7b6e7dc42a3cac22eac3189c9c26242489fa31478f7bb41cdb7e0",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "BPCL",
+          "update": {
+            "source": "local",
+            "name": "BPCL",
+            "status": "extended",
+            "yahoo_ticker": "BPCL.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 1.9503952633040484,
+        "rmse": 2.3454042347095307,
+        "mape_percent": 1.3938089993843665,
+        "directional_accuracy_percent": 35.0
+      }
+    },
+    {
+      "symbol": "ITC",
+      "graph": "graphs\\ITC-5e513d6341.png",
+      "series": "series\\ITC-5e513d6341.csv",
+      "series_sha256": "42d6a032af6cf45244a348e7a1c88c854027f6c116ea4e61480ed72937b05250",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_50:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_50:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEI",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "SENSEX:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "SENSEX:Close",
+            "status": "extended",
+            "yahoo_ticker": "^BSESN",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 3.275897475589102,
+        "rmse": 4.064985639130733,
+        "mape_percent": 1.1698163708480835,
+        "directional_accuracy_percent": 60.0
+      }
+    },
+    {
+      "symbol": "JIOFIN",
+      "graph": "graphs\\JIOFIN-4e74be49ba.png",
+      "series": "series\\JIOFIN-4e74be49ba.csv",
+      "series_sha256": "b2916f3c4d1abd438f7cf67da7d30ada381e4eac78f64a44fe1899c08743067e",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_500:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_500:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CRSLDX",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 3.0571777404052964,
+        "rmse": 4.086925615197119,
+        "mape_percent": 1.3977123157469027,
+        "directional_accuracy_percent": 40.0
+      }
+    },
+    {
+      "symbol": "JSWSTEEL",
+      "graph": "graphs\\JSWSTEEL-c0d2020899.png",
+      "series": "series\\JSWSTEEL-c0d2020899.csv",
+      "series_sha256": "7a85772184b9bb74ddbc0c042ae50ad8233f9c104021a387d27c4925712f03e8",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "TATASTEEL",
+          "update": {
+            "source": "local",
+            "name": "TATASTEEL",
+            "status": "extended",
+            "yahoo_ticker": "TATASTEEL.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 15.91446811556981,
+        "rmse": 24.466931383864807,
+        "mape_percent": 1.2417381473918059,
+        "directional_accuracy_percent": 65.0
+      }
+    },
+    {
+      "symbol": "KOTAKBANK",
+      "graph": "graphs\\KOTAKBANK-3d25b7622c.png",
+      "series": "series\\KOTAKBANK-3d25b7622c.csv",
+      "series_sha256": "5fc93131896033b7bccaa0dd09d7499c53ccaf10eea3eb877db3f2ef1434ef63",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_BANK:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_BANK:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEBANK",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 5.37942740841668,
+        "rmse": 6.906312141128835,
+        "mape_percent": 1.1528644182810939,
+        "directional_accuracy_percent": 70.0
+      }
+    },
+    {
+      "symbol": "LT",
+      "graph": "graphs\\LT-61835352df.png",
+      "series": "series\\LT-61835352df.csv",
+      "series_sha256": "e8d8dd0837f54a839f5283cc6b56cbbb48408b1291fba3d915146a5f16b454f0",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_100:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_100:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX100",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_200:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_200:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX200",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_500:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_500:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CRSLDX",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_50:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_50:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEI",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 37.435985160265226,
+        "rmse": 52.79848706164874,
+        "mape_percent": 0.9356261125376719,
+        "directional_accuracy_percent": 60.0
+      }
+    },
+    {
+      "symbol": "LTM",
+      "graph": "graphs\\LTM-f4f71f0d53.png",
+      "series": "series\\LTM-f4f71f0d53.csv",
+      "series_sha256": "2195f0db5a02f36c5075a50dc54ea6379a016d8600f6f230e36ea85841a416cc",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_IT:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_IT:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNXIT",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 54.091079774114334,
+        "rmse": 72.68439389080406,
+        "mape_percent": 1.2806567759240568,
+        "directional_accuracy_percent": 65.0
+      }
+    },
+    {
+      "symbol": "M&M",
+      "graph": "graphs\\M_M-ba055b5f2f.png",
+      "series": "series\\M_M-ba055b5f2f.csv",
+      "series_sha256": "e306f7673f5d97d116f3ce4b36a883889a89106621f870e9fdfe4561bf6f462a",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_100:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_100:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX100",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_200:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_200:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX200",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_500:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_500:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CRSLDX",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 54.42031615223859,
+        "rmse": 74.1383709903975,
+        "mape_percent": 1.6867400293036072,
+        "directional_accuracy_percent": 65.0
+      }
+    },
+    {
+      "symbol": "MARUTI",
+      "graph": "graphs\\MARUTI-e48d162fae.png",
+      "series": "series\\MARUTI-e48d162fae.csv",
+      "series_sha256": "707d008ce082dc39c60f86d113d0e70a91fad3a6c2959f622bb93130069cef66",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_100:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_100:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX100",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_200:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_200:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX200",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_500:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_500:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CRSLDX",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_50:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_50:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEI",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 200.3572251993797,
+        "rmse": 297.22584315592457,
+        "mape_percent": 1.5941897041409918,
+        "directional_accuracy_percent": 60.0
+      }
+    },
+    {
+      "symbol": "MAXHEALTH",
+      "graph": "graphs\\MAXHEALTH-b28127d693.png",
+      "series": "series\\MAXHEALTH-b28127d693.csv",
+      "series_sha256": "4e01e9d5355535f9356ddb2b4c48a11f01533234a9955f52ede5417cd621838f",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 13.236116101187303,
+        "rmse": 18.835122224213418,
+        "mape_percent": 1.4074804716825364,
+        "directional_accuracy_percent": 70.0
+      }
+    },
+    {
+      "symbol": "NESTLEIND",
+      "graph": "graphs\\NESTLEIND-411ba7ca22.png",
+      "series": "series\\NESTLEIND-411ba7ca22.csv",
+      "series_sha256": "f265d79449861f75a804a6027f8a5ab702bc2fb7665d07709db8ca4a04086e2c",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "HINDUNILVR",
+          "update": {
+            "source": "local",
+            "name": "HINDUNILVR",
+            "status": "extended",
+            "yahoo_ticker": "HINDUNILVR.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 17.75524112758286,
+        "rmse": 21.9185988049424,
+        "mape_percent": 1.4356848385680478,
+        "directional_accuracy_percent": 50.0
+      }
+    },
+    {
+      "symbol": "NTPC",
+      "graph": "graphs\\NTPC-a60bba1ae5.png",
+      "series": "series\\NTPC-a60bba1ae5.csv",
+      "series_sha256": "aac21ef239362beff24358580d1bea51c6d548f8f83a36e636975c1ad934f9b1",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "POWERGRID",
+          "update": {
+            "source": "local",
+            "name": "POWERGRID",
+            "status": "extended",
+            "yahoo_ticker": "POWERGRID.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 3.2811882604923115,
+        "rmse": 3.8951789456054247,
+        "mape_percent": 1.0345573773679348,
+        "directional_accuracy_percent": 60.0
+      }
+    },
+    {
+      "symbol": "ONGC",
+      "graph": "graphs\\ONGC-6a6ccf3c4f.png",
+      "series": "series\\ONGC-6a6ccf3c4f.csv",
+      "series_sha256": "55d76d2eeba95c7123817dec791d4a863d7a2a4aaa80cafab8e63004bb679331",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "COALINDIA",
+          "update": {
+            "source": "local",
+            "name": "COALINDIA",
+            "status": "extended",
+            "yahoo_ticker": "COALINDIA.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 2.656762832181242,
+        "rmse": 3.9532580659247385,
+        "mape_percent": 1.1631737308727312,
+        "directional_accuracy_percent": 55.00000000000001
+      }
+    },
+    {
+      "symbol": "POWERGRID",
+      "graph": "graphs\\POWERGRID-def6d2b26c.png",
+      "series": "series\\POWERGRID-def6d2b26c.csv",
+      "series_sha256": "31f912ce491792084db3a729ff767033ce8f1958f103b05b63c12f9c0a045621",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "NTPC",
+          "update": {
+            "source": "local",
+            "name": "NTPC",
+            "status": "extended",
+            "yahoo_ticker": "NTPC.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 3.2280478945243445,
+        "rmse": 4.018953542041718,
+        "mape_percent": 1.2434492266962658,
+        "directional_accuracy_percent": 70.0
+      }
+    },
+    {
+      "symbol": "RELIANCE",
+      "graph": "graphs\\RELIANCE-9e95498193.png",
+      "series": "series\\RELIANCE-9e95498193.csv",
+      "series_sha256": "723cc6f8e2e7f348772512128d8b2d685dbe0cbeaf0b12107f94f269964ac82d",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_100:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_100:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX100",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_50:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_50:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEI",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "SENSEX:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "SENSEX:Close",
+            "status": "extended",
+            "yahoo_ticker": "^BSESN",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 15.800446088475804,
+        "rmse": 32.83009577219739,
+        "mape_percent": 1.244926295516886,
+        "directional_accuracy_percent": 55.00000000000001
+      }
+    },
+    {
+      "symbol": "SBILIFE",
+      "graph": "graphs\\SBILIFE-c966699a46.png",
+      "series": "series\\SBILIFE-c966699a46.csv",
+      "series_sha256": "cc0bedd0e46adcdff5908a511d6756f724c571508458fa490b32fc828621d444",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "HDFCLIFE",
+          "update": {
+            "source": "local",
+            "name": "HDFCLIFE",
+            "status": "extended",
+            "yahoo_ticker": "HDFCLIFE.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 22.443988991539708,
+        "rmse": 26.59508492339569,
+        "mape_percent": 1.2833364060127588,
+        "directional_accuracy_percent": 40.0
+      }
+    },
+    {
+      "symbol": "SBIN",
+      "graph": "graphs\\SBIN-def2b119c5.png",
+      "series": "series\\SBIN-def2b119c5.csv",
+      "series_sha256": "fd8181305aa2993245c17a975a85b74828528203aef6b19638571b3c3dadd37b",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_BANK:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_BANK:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEBANK",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 16.22921311185403,
+        "rmse": 17.895006015358142,
+        "mape_percent": 1.5722608429435723,
+        "directional_accuracy_percent": 25.0
+      }
+    },
+    {
+      "symbol": "SHREECEM",
+      "graph": "graphs\\SHREECEM-eee017dea3.png",
+      "series": "series\\SHREECEM-eee017dea3.csv",
+      "series_sha256": "17705f7d7b77104886cd9b974d3b97ecc99b09efe790fe49acf5a209da53498e",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "ULTRACEMCO",
+          "update": {
+            "source": "local",
+            "name": "ULTRACEMCO",
+            "status": "extended",
+            "yahoo_ticker": "ULTRACEMCO.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 267.3820958640714,
+        "rmse": 331.25361477255615,
+        "mape_percent": 1.1125414233061621,
+        "directional_accuracy_percent": 65.0
+      }
+    },
+    {
+      "symbol": "SHRIRAMFIN",
+      "graph": "graphs\\SHRIRAMFIN-d62366eb2a.png",
+      "series": "series\\SHRIRAMFIN-d62366eb2a.csv",
+      "series_sha256": "444fbff98b729f5d11edeecf984d6fb29cca66f0164f018a67bea42e4a94098f",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_MIDCAP_50:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_MIDCAP_50:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEMDCP50",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 19.59620021545755,
+        "rmse": 25.63340573941316,
+        "mape_percent": 2.1650025960722212,
+        "directional_accuracy_percent": 40.0
+      }
+    },
+    {
+      "symbol": "SUNPHARMA",
+      "graph": "graphs\\SUNPHARMA-506b8d7f7c.png",
+      "series": "series\\SUNPHARMA-506b8d7f7c.csv",
+      "series_sha256": "7fb0f03025a103f296794e391ed0361db881c80e2e0b24644e68e62e917654de",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_PHARMA:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_PHARMA:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNXPHARMA",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 12.902287484294959,
+        "rmse": 19.28661880774988,
+        "mape_percent": 0.7012426094515118,
+        "directional_accuracy_percent": 60.0
+      }
+    },
+    {
+      "symbol": "TATACONSUM",
+      "graph": "graphs\\TATACONSUM-9e4dadde75.png",
+      "series": "series\\TATACONSUM-9e4dadde75.csv",
+      "series_sha256": "a81b55ec2aa336f053f0f72f96707db3f22c9e153359e236a4ad3ecaa3d0f4d8",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_100:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_100:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX100",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_200:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_200:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX200",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_500:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_500:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CRSLDX",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 14.000233355059539,
+        "rmse": 21.440446107361176,
+        "mape_percent": 1.3414203279995462,
+        "directional_accuracy_percent": 70.0
+      }
+    },
+    {
+      "symbol": "TATASTEEL",
+      "graph": "graphs\\TATASTEEL-4787ebeb1c.png",
+      "series": "series\\TATASTEEL-4787ebeb1c.csv",
+      "series_sha256": "7d7cd3e26a6f4fbe4aed3b6ba13811eb0e64f345db92f9ca961afff941e4f518",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "JSWSTEEL",
+          "update": {
+            "source": "local",
+            "name": "JSWSTEEL",
+            "status": "extended",
+            "yahoo_ticker": "JSWSTEEL.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 2.579245871653427,
+        "rmse": 3.3241432374297015,
+        "mape_percent": 1.4453320460086867,
+        "directional_accuracy_percent": 50.0
+      }
+    },
+    {
+      "symbol": "TCS",
+      "graph": "graphs\\TCS-d628d99263.png",
+      "series": "series\\TCS-d628d99263.csv",
+      "series_sha256": "95e4e1e95a8686b90db44ad55648e7629fcf87aa7ecb028f2e26ecb613d06c17",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_IT:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_IT:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNXIT",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 23.19475724846736,
+        "rmse": 30.022470781212384,
+        "mape_percent": 0.9455459891614882,
+        "directional_accuracy_percent": 50.0
+      }
+    },
+    {
+      "symbol": "TECHM",
+      "graph": "graphs\\TECHM-4f4e87d59a.png",
+      "series": "series\\TECHM-4f4e87d59a.csv",
+      "series_sha256": "04423f989ea11a0b0b45095fce026d3694db3cdd79050bedb33e97bbd6176aec",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_IT:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_IT:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNXIT",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 14.95946664546842,
+        "rmse": 18.40237312386865,
+        "mape_percent": 0.8361545502468575,
+        "directional_accuracy_percent": 65.0
+      }
+    },
+    {
+      "symbol": "TITAN",
+      "graph": "graphs\\TITAN-308e6000ae.png",
+      "series": "series\\TITAN-308e6000ae.csv",
+      "series_sha256": "90e7842ea8b9c81d138f4da06bdd5386ed4698f91499955d1673522dc6cfc6f9",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_100:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_100:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX100",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_200:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_200:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNX200",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_500:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_500:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CRSLDX",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 68.82903228195532,
+        "rmse": 94.96026157969453,
+        "mape_percent": 1.4688321370453195,
+        "directional_accuracy_percent": 55.00000000000001
+      }
+    },
+    {
+      "symbol": "TMPV",
+      "graph": "graphs\\TMPV-11195895bc.png",
+      "series": "series\\TMPV-11195895bc.csv",
+      "series_sha256": "38a5227d739addc7f830a57c1d11b9099046996bc00d3ac7a2103653fd29c128",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_500:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_500:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CRSLDX",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 5.79254620222873,
+        "rmse": 8.135623990793134,
+        "mape_percent": 2.1269679264095864,
+        "directional_accuracy_percent": 50.0
+      }
+    },
+    {
+      "symbol": "TRENT",
+      "graph": "graphs\\TRENT-08d2926d70.png",
+      "series": "series\\TRENT-08d2926d70.csv",
+      "series_sha256": "871db0fc833a89a22b9e94d2b6fa531daafe4ada05f831d1485dcbd07482a179",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_MIDCAP_50:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_MIDCAP_50:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEMDCP50",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 43.75667055267816,
+        "rmse": 56.228951130031334,
+        "mape_percent": 1.4570994573862577,
+        "directional_accuracy_percent": 50.0
+      }
+    },
+    {
+      "symbol": "ULTRACEMCO",
+      "graph": "graphs\\ULTRACEMCO-9b0994625c.png",
+      "series": "series\\ULTRACEMCO-9b0994625c.csv",
+      "series_sha256": "396032966dc4e45faad4529d51cd7644febc682f9d475e3fe5d2f158e4b94714",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "local",
+          "name": "GRASIM",
+          "update": {
+            "source": "local",
+            "name": "GRASIM",
+            "status": "extended",
+            "yahoo_ticker": "GRASIM.NS",
+            "rows_added": 203,
+            "saved_through": "2026-01-21",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 135.57751938950724,
+        "rmse": 169.23926726029802,
+        "mape_percent": 1.1433178909579116,
+        "directional_accuracy_percent": 70.0
+      }
+    },
+    {
+      "symbol": "UPL",
+      "graph": "graphs\\UPL-7f1fbd03e0.png",
+      "series": "series\\UPL-7f1fbd03e0.csv",
+      "series_sha256": "3a6dba514ab5e9ee1478a0c43f85e52b4b9c325dcc6b95c06e417f9a987d9834",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_500:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_500:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CRSLDX",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        },
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_MIDCAP_50:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_MIDCAP_50:Close",
+            "status": "extended",
+            "yahoo_ticker": "^NSEMDCP50",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 8.552666074291121,
+        "rmse": 11.57403239422227,
+        "mape_percent": 1.6084452806666503,
+        "directional_accuracy_percent": 55.00000000000001
+      }
+    },
+    {
+      "symbol": "WIPRO",
+      "graph": "graphs\\WIPRO-094e0017b5.png",
+      "series": "series\\WIPRO-094e0017b5.csv",
+      "series_sha256": "f2b0a956847cd518412f775d309f8dab333f762ac5601f4dae33395bec2dacaf",
+      "first_target_session": "2026-10-22",
+      "last_target_session": "2026-11-19",
+      "selected_factors": [
+        {
+          "source": "india:aswinv90/indian-market-historical-data",
+          "name": "NIFTY_IT:Close",
+          "update": {
+            "source": "india:aswinv90/indian-market-historical-data",
+            "name": "NIFTY_IT:Close",
+            "status": "extended",
+            "yahoo_ticker": "^CNXIT",
+            "rows_added": 4,
+            "saved_through": "2026-11-13",
+            "yahoo_through": "2026-11-19"
+          }
+        }
+      ],
+      "missing_factor_prediction_rows": 0,
+      "metrics": {
+        "count": 20,
+        "mae": 2.444351830755578,
+        "rmse": 3.107311835983812,
+        "mape_percent": 1.269220831027378,
+        "directional_accuracy_percent": 40.0
+      }
+    }
+  ],
+  "failures": [
+    {
+      "symbol": "HDFC",
+      "error": "ValueError: No data returned for symbol HDFC.NS with interval 1d."
+    }
+  ],
+  "limitations": [
+    "Historical one-day-ahead predictions, not forecasts of future sessions.",
+    "Trend lines are retrospective linear fits over the displayed sessions.",
+    "Factor observations may be stale or missing; missing counts refer to decision rows.",
+    "Yahoo extensions are not checked against saved history; differing adjustments may cause false jumps.",
+    "Yahoo Finance is not exchange-verified and may not provide the latest market session."
+  ]
+}

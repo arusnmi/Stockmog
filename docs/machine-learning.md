@@ -152,6 +152,914 @@ already-inspected tests. Those follow-up steps need a validation-only selection
 procedure and genuinely later untouched data; retraining, if warranted, is a
 separate user-initiated step.
 
+## Nifty 50 price-model research
+
+The new daily-price regression components, research-only workflow commands,
+holdout evaluation and per-stock graphical reports are implemented.
+The production workflow is **not implemented**.
+`modeling.nifty_universe` provides historical membership parsing
+from the [CC0 point-in-time membership dataset](https://github.com/aditya-jha/nse-historical-membership).
+Its source revision is pinned; lookups are limited to April 2018 through
+October 13, 2026. Historical symbol renames and corporate actions must be
+verified against local files before using them for training. The verified
+2023-07-13 to 2024-09-29 `LTM` membership is mapped to local `LTIM`; the
+mapping is rejected outside that interval.
+
+### Data inventory and causal preparation
+
+The local candidate catalog inventories historical members and Nifty-named
+index/fund series, their available timeframe files, and actual minute-derived
+and independent daily-source coverage. These are overlapping market proxies, not 138 independent
+economic or global factors. A file's presence does not establish complete
+intraday coverage. Missing-session checks use minute-derived RELIANCE sessions,
+not an authoritative exchange calendar; for example, that reference omits
+2022-10-24 although the local RELIANCE daily source contains that date.
+The configured local source is
+[Saintforest/indian-stock-market-minute-data](https://huggingface.co/datasets/Saintforest/indian-stock-market-minute-data);
+its card declares MIT, but the revision used to build the local files was not
+recorded. Verify data rights before redistribution.
+
+```powershell
+python -m modeling.nifty_preparation catalog --output "data\external\new_nifty_catalog"
+python -m modeling.nifty_preparation prepare --output "data\external\new_nifty_prepared" `
+  --stocks RELIANCE LTM --factors NIFTY
+```
+
+Omit `--stocks` and `--factors` to select all historical members and local
+candidates. Use `--stocks` or `--factors` with no values to select none of
+that kind, and `--timeframes` to select a subset. The default is all nine
+timeframes. Prepared stock and factor files are kept separate, in Parquet
+chunks, not expanded into a large stock-by-factor matrix. The preparation
+records missing inputs but cannot repair gaps within an existing file.
+Run `python -m modeling.nifty_preparation coverage --output <run-directory>`
+after preparation to create `coverage.json`, which distinguishes missing
+files from series with no eligible rows and reports prepared row counts.
+
+The separately stored daily source includes some dates absent from minute-derived
+files, including special evening sessions. Prepare it separately, without
+inventing intraday data:
+
+```powershell
+python -m modeling.nifty_preparation prepare --output "data\external\new_daily_source" `
+  --candle-source day --timeframes 1d 2d trading_week
+```
+
+For these daily-source bars, `available_at` is conservatively the following
+midnight IST, to avoid assuming that special sessions close at 15:30. This is
+not an audited vendor publication time. Two-day bars combine consecutive
+observed sessions, not necessarily consecutive official sessions; the second
+session's following midnight is their availability time. Short weeks are
+marked partial and weekly bars become available the next Monday. Daily-source
+multisession input must fit in `--chunk-rows`; increase it if preparation reports
+that it is too small. Do not combine these bars with minute-derived aggregates
+without accounting for their different session coverage.
+
+Output includes UTC `available_at`, not just the bar's start label. Intraday
+bars become available at their scheduled end (capped at 15:30 IST); minute-derived daily
+bars at 15:30 IST; two-session bars at the second session close; and weekly
+bars conservatively at the following Monday midnight IST. Incomplete
+two-session bars are excluded. Historical stock membership must cover the
+entire aggregate candle. The `join_available` helper uses a backward-only
+join with a required maximum age; missing/stale values stay missing. A decision
+at exactly `available_at` assumes zero publication and processing latency.
+These rules assume standard NSE session hours and the local pipeline's bar
+conventions; unusual sessions require separate verification.
+
+Use the existing `training-control pause|resume|stop|status` commands with the
+catalog or preparation output directory. Cataloging checks the controls between
+series; preparation checks between input chunks and jobs. After a stop or
+interruption, rerun the identical command with `--resume`; already written
+chunks are checksum-verified and inputs/settings must match. Input identity uses
+file sizes and modification times, not content hashes for the large candle
+files, so it cannot detect deliberately preserved timestamps and sizes.
+Do not run two workers against the same output directory.
+
+HDFC daily data was recovered from the pinned
+[olo-labs NSE release](https://github.com/olo-labs/olo-ai-training-data-nse).
+The recovered file has 378 unique sessions covering HDFC's local membership
+period, after removing 97 identical duplicate rows. Its dates match the local
+daily RELIANCE reference; this is not an authoritative exchange-calendar check.
+The release code is Apache-2.0, but its underlying market-data rights need
+independent verification. To reproduce the download and validation:
+
+```powershell
+python -m data_pipeline.nifty_hdfc_daily --output "data\external\new_hdfc_daily_source"
+```
+
+The collector validates a pinned archive checksum, rejects conflicting duplicates
+and missing reference sessions, and will not overwrite an unrelated destination.
+It supports the same controls and `--resume`.
+
+The public [HDFC intraday archive](https://github.com/gsidhu/nse-intraday-data)
+can be collected separately:
+
+```powershell
+python -m data_pipeline.nifty_hdfc_archive --run-dir "data\external\hdfc_archive"
+```
+
+It has missing sessions and no data in that archive for March-July 2023; a
+December file also contained the wrong date and was quarantined. Its README
+states MIT, but no separate license file
+was found. Raw timestamps and data rights still require verification, so these
+files are **not** merged into the prepared dataset. The collector supports the
+same controls and `--resume`.
+
+An exploratory daily correlation audit can be run with:
+
+```powershell
+python -m modeling.factor_research `
+  --membership "data\external\nse_index_membership_0786cd915974.csv" `
+  --stocks "data\stocks" `
+  --output "data\external\new_factor_audit" `
+  --train-end 2025-01-01
+```
+
+The output directory must not already exist for the first run. Preparation
+checkpoints each completed daily factor and stock file. To pause, resume or stop
+from another terminal, use the same output directory:
+
+```powershell
+python main.py training-control pause --run-dir "data\external\new_factor_audit"
+python main.py training-control status --run-dir "data\external\new_factor_audit"
+python main.py training-control resume --run-dir "data\external\new_factor_audit"
+python main.py training-control stop --run-dir "data\external\new_factor_audit"
+```
+
+Pause and stop take effect after the current daily input file or stock is
+processed; they do not interrupt a file read in progress. A stopped or interrupted
+run can be restarted with the original audit command plus `--resume`; matching
+completed checkpoints are reused. Resume refuses changed input-file sizes or
+modification times, membership contents, or settings. File size and modification
+time alone do not prove stock-file contents are unchanged.
+
+The audit screens local Nifty-named market indices and funds, not a complete set
+of independent global factors.
+It correlates each factor's same-session return with the stock's next-session
+return using only sessions and labels strictly before the training cutoff,
+requires both stock dates to fall within the same membership interval, and
+discards returns crossing missing RELIANCE-reference sessions. It assumes
+same-session factors are available by next midnight IST; actual publication
+latency is unverified. It applies the absolute 0.7 threshold. Missing stock files and stocks without
+enough paired observations are reported separately from stocks with no qualifying
+factor. This is exploratory end-of-day research, not an intraday dataset,
+price-model training, or proof of trading performance.
+The corrected audit uses manifest format 3 and cannot resume older format 2
+results; start it in a new directory.
+
+To also screen all local daily stock and fund files, run the same audit with
+`--include-peers` and a new output directory. This uses format 4, excludes the
+target stock's local file, and cannot be consumed by the existing format-3
+selection command. Resume requires the same flag and `--resume`.
+
+These are peer-price candidates, not independent economic variables. The local
+catalog is retrospective, can contain renamed or delisted securities, and can
+introduce survivorship bias. Checking thousands of correlations increases the
+chance of finding apparently strong relationships by chance. Source rights,
+corporate actions and publication timing still require verification.
+In one pre-2025 audit of 2,536 local candidates, 119,113 stock/peer pairs
+were scorable; none reached absolute correlation 0.49. The largest was
+approximately 0.468, based on 90 paired sessions. Twelve of 67 historical
+members had no scorable peer. This is a next-daily-return screen, not a
+next-candle or out-of-sample performance test.
+
+### Global factor research
+
+The 100 additional US-listed ETF and fund proxies are drawn from
+[syncster-data/historical-market-data](https://huggingface.co/datasets/syncster-data/historical-market-data),
+pinned to revision `eff0dac55d843b3b83caec819efa213021a3e3e5`. The dataset
+card says research and education only; corporate-action adjustments, vendor
+publication latency, and commercial or redistribution rights remain unverified.
+The funds overlap and are not 100 independent economic variables. Each source
+file is checked against its pinned LFS SHA-256. The collection covers all nine
+timeframes, with actual observations only; rows outside regular US weekday
+hours are excluded and missing bars are not invented. Daily and weekly outputs
+flag incomplete bars. Use separate output directories and the same controls as
+above; download checkpoints occur at blocks and preparation checkpoints between
+timeframes. Resume using `--resume`:
+
+```powershell
+python -m data_pipeline.global_factor_data --output "data\external\new_global_factors"
+python -m modeling.global_factor_research `
+  --factors-root "data\external\new_global_factors" `
+  --output "data\external\new_global_audit" --train-end 2025-01-01
+```
+
+The default audit compares the latest causally available return from a complete
+US session with the next NSE-session stock return. It uses SPY and RELIANCE as
+session-calendar proxies, excludes returns across missing proxy sessions,
+restricts both stock dates to membership and the training cutoff, and uses a
+maximum factor age of five days. US daily bars are conservatively available at
+the next New York midnight, so a US session that has not finished by the
+decision time cannot be used. The optional `--max-close-age-minutes 5` permits
+partial sessions only if their actual last observed minute ends within five
+minutes of 16:00 New York and matches the daily aggregate close. This is a
+near-close proxy, not a verified official close; early-close sessions are
+conservatively excluded. Use a new audit output directory for this alternative.
+The actual source timestamp convention and publication delay still need
+verification. No correlation result is evidence of predictive performance,
+particularly with overlapping funds and multiple testing.
+
+### Per-stock factor selection and extra sector candidates
+
+Additional sector and industry funds can be collected from the same pinned
+research-only dataset. This catalog includes SPY as the US session-calendar
+proxy plus 36 new tickers; their portfolios may overlap the first 100 funds:
+
+```powershell
+python -m data_pipeline.global_factor_data --sector-candidates `
+  --output "data\external\new_sector_factors"
+python -m modeling.global_factor_research `
+  --factors-root "data\external\new_sector_factors" `
+  --output "data\external\new_sector_audit" --train-end 2025-01-01 `
+  --max-close-age-minutes 5
+```
+
+The additional funds are US-listed proxies, not necessarily Indian sector
+indices or independent variables. Apply the same source-rights and near-close
+limitations described above. No missing observations are invented.
+
+Combine a completed format-3 local audit with one or more completed global
+audits using the same membership, cutoff and minimum observation count. Global
+audits must also use the same factor-age and near-close settings; in this example
+both global audits use `--max-close-age-minutes 5`.
+
+```powershell
+python -m modeling.nifty_factor_selection `
+  --local-audit "data\external\new_factor_audit" `
+  --global-audit "data\external\new_global_audit" `
+  --global-audit "data\external\new_sector_audit" `
+  --output "data\external\new_factor_selection" --train-end 2025-01-01
+```
+
+`selection.json` lists each stock's qualifying factors and their full-precision
+correlations. `stocks.csv` distinguishes missing stock data, insufficient
+observations and no qualifying factors. The exact absolute threshold is 0.7;
+it is never reduced or replaced with a fallback. Matching duplicates from the
+same pinned source are counted once. Input identity and audit checkpoints are
+checked; pause or stop via `training-control` and rerun with `--resume`.
+
+These are exploratory selections based on data before the cutoff. Using them
+for earlier training examples would leak future information; each chronological
+fold needs a selection made before that fold's earliest example.
+Unverified data rights, adjusted prices, source timestamps, publication times,
+and exchange calendars also block claims of training readiness.
+
+### Daily price-model components
+
+`modeling.nifty_candle_examples.build_candle_examples` is a separate
+next-candle example builder for all nine prepared timeframes. It pairs complete
+consecutive candles within historical membership and returns the actual next
+close and its availability time. Intraday examples do not cross sessions or
+gaps; daily and multisession examples use the supplied reference calendar.
+This builder is **not yet connected** to the price trainer, factor selection,
+evaluation or report commands. It is not a trained next-candle model.
+
+An additional reproducible exploratory screen collects four INR exchange-rate
+series, the India 10-year yield, ten India indices, and gold and silver from the pinned
+[Indian market dataset](https://github.com/aswinv90/indian-market-historical-data/tree/eb3d7aa4639eb9434409b3950d9730d4ae9a6624).
+The source's license restricts use to non-commercial research, personal use
+and education. Its attribution, publication timing, revision history and
+adjustment methods require review. The screen assumes daily values are available
+by the following midnight IST; this assumption is unverified. Sparse commodity
+histories may not yield enough consecutive observations. Monthly CPI and policy
+series are excluded because their release dates are unverified.
+
+```powershell
+python -m modeling.nifty_public_factor_research `
+  --membership "data\external\nse_index_membership_0786cd915974.csv" `
+  --stocks-root "data\stocks" --output "data\external\new_public_factor_audit" `
+  --train-end 2025-01-01
+```
+
+The output directory must be new. A stopped run can be continued with the same
+command plus `--resume`; the usual training controls apply at file and stock
+boundaries. Resume checks pinned Git blobs, input fingerprints and source code
+identity. Stock fingerprints use size and modification time, not content hashes.
+One audit produced 817 scorable stock/series pairs across 55 stocks before
+2025-01-01; 12 stocks had insufficient observations and none of these pairs
+reached an absolute correlation of 0.49 with the next daily stock return. This
+is neither a next-candle screen nor an exhaustive factor search. These results
+are not integrated into factor selection or training.
+
+Additional U.S. Treasury nominal, real and bill-rate levels and changes can be
+screened directly from the [Treasury daily rates](https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView)
+using a new directory:
+
+```powershell
+python -m modeling.nifty_treasury_factor_research `
+  --membership "data\external\nse_index_membership_0786cd915974.csv" `
+  --stocks-root "data\stocks" --output "data\external\new_treasury_audit" `
+  --train-end 2025-01-01
+```
+
+Add `--resume` after a stop; the usual controls work between files and stocks.
+Downloaded snapshots are retained and checked against their recorded SHA-256
+hashes. One audit screened 60 overlapping rate features and 3,294 scorable
+stock/feature pairs before 2025-01-01; none reached absolute 0.49. Twelve
+stocks had insufficient observations. This audit assumes rates are available
+at the next New York midnight, but neither publication latency nor historical
+revisions have been verified. Snapshot hashes do not establish point-in-time
+vintages. This is exploratory daily research and is not integrated into
+selection or training.
+
+An additional exploratory screen compared RBI/FBIL reference exchange rates
+from the pinned [reference-rates archive](https://github.com/the-solipsist/rbi-forex-reference-rates/tree/7fa5b91b17b9f79d74805c9db1b26ff5727c49e2)
+and EIA Brent/WTI prices via [DataHub](https://datahub.io/datapressr/oil-prices).
+None of 660 scorable stock/feature pairs reached absolute 0.49. The INR series
+were assumed available the following midnight IST; crude observations were
+delayed seven days. Publication timing, historical revisions and underlying
+data rights remain unverified. AED and IDR reference histories begin in 2026
+and cannot be used in the pre-2025 screen.
+
+Do not use FRED or ALFRED data to develop or train the model: their
+[terms](https://fred.stlouisfed.org/legal/) prohibit use of their services or
+content in machine-learning development or training. Direct Treasury data above
+is obtained from Treasury, not FRED.
+
+### Historical same-candle correlations
+
+The same-candle screen is separate from the next-candle screen below. For each
+historical Nifty stock and factor, it matches complete historical candles at the
+same timeframe and calculates overall Pearson and Spearman coefficients for
+closing prices and for consecutive close-to-close returns. Treasury and bond
+yield changes are absolute rate changes. A return pair is used only when both
+series have the same previous candle interval. Stock candles must fall within
+verified Nifty membership periods. The first and last matched candle and the
+number of pairs are reported for each measure; no dates are filled in.
+
+Run all available local peers, global factors, and the saved daily economic
+factor snapshots:
+
+```powershell
+$corrArgs = @(
+  '--membership', 'data\external\nse_index_membership_0786cd915974.csv',
+  '--stocks', 'data\stocks',
+  '--output', 'data\external\nifty_same_candle_correlations',
+  '--global-factors', 'data\external\global_factor_research',
+  '--global-factors', 'data\external\nifty_extra_sector_factors',
+  '--india-audit', 'data\external\nifty_all_factors_india_2025',
+  '--treasury-audit', 'data\external\nifty_all_factors_treasury_2025',
+  '--prices-audit', 'data\external\nifty_all_factors_prices_2025'
+)
+python -m modeling.nifty_same_candle_correlations @corrArgs
+```
+
+Each stock has a separate CSV under the output's `stocks` directory. Fewer
+than three pairs, constant values, missing candles, and factors without that
+timeframe are reported, not substituted with another timeframe. Daily economic
+snapshots only supply daily observations. Two-day and weekly comparisons
+require the same underlying sessions. US and Indian daily closes on the same
+date occur at different times; this is a retrospective date match, not a
+point-in-time feature.
+
+This full screen repeatedly reads a large amount of compressed history and
+computes ranks for each pair. It may take a long time; no 24-hour completion
+is guaranteed. The existing `training-control` pause, resume, and stop commands
+work with this output directory. Restart a stopped run with the same arguments
+and `--resume`; an interrupted stock is recomputed. Source rights, adjustment
+methods and publication times remain unverified. These contemporaneous
+correlations, especially price levels, do not establish predictive power or
+profitability and must not be used as if they were next-candle predictions.
+
+### Separate stock/timeframe price and trend models
+
+The completed same-candle scan can supply the historical stock universe to
+`modeling.nifty_timeframe_workflow`. This is a separate workflow from the older
+pooled daily trainer below. Nothing trains on import or during `prepare`.
+Run these commands from the repository root in **Command Prompt**, one at a
+time, only when you want each stage to start. `train` automatically prepares
+the data first, then starts the parallel training workers:
+
+```bat
+nifty.cmd train --research-only
+nifty.cmd evaluate
+nifty.cmd predict --symbol INFY --timeframe 1d
+```
+
+In PowerShell use `.\nifty.cmd` instead. `prepare` remains available for an
+explicit preparation-only check, but is not needed before `train`.
+The wrapper changes to its own directory,
+forwards arguments, and preserves Python's exit code. There is no `$corrArgs`
+variable to lose when reopening a terminal. The equivalent entry point is
+`python -m modeling.nifty_timeframe_workflow`. Defaults use the completed
+`data\external\nifty_same_candle_correlations` scan and write a **new** run under
+`data\models\nifty-timeframe`. They do not reuse older trained models.
+
+To make a rolling one-day-ahead daily prediction series with an already trained
+run, use:
+
+```bat
+nifty.cmd predict-series --symbol BSE
+```
+
+The command keeps saved daily candles and downloads only later daily candles
+from the existing Yahoo Finance provider. It does not check the two feeds for
+consistent price adjustments: the join can create a false jump and distort
+features or predictions. It requires the stock and Nifty reference series to
+reach the same latest session. Before 15:45 IST it excludes the current date; afterward it can use
+that session if Yahoo has published its daily candle. Targets start at the
+saved model's holdout boundary, and each prediction uses only candles through
+the preceding target session. The CSV and summary are written to
+`data\models\nifty-timeframe\jobs\BSE\1d\prediction-series.csv` and
+`prediction-series-summary.json`. This does not train a model or change saved
+stock data. Actual closes are included only for historical comparison. Yahoo
+Finance is not an exchange-verified source, so the reported latest session is
+the latest complete session returned by that source, not a guarantee of
+exchange publication or accuracy.
+
+For a combined stock forecast report covering the latest **20 completed
+sessions** of every prepared daily model:
+
+```bat
+nifty.cmd forecast-report
+```
+
+In PowerShell use `.\nifty.cmd forecast-report`. To report only selected stocks:
+`nifty.cmd forecast-report --symbols BSE INFY`. A new timestamped folder under
+`stock_forecasts` contains
+`stock_forecast_report.pdf`, individual PNGs, the underlying per-stock CSVs,
+and `report.json`. The PDF includes an executive summary, methodology,
+stock-by-stock metrics and graphs, daily results, and source notes. To build a
+detailed PDF from an existing report folder without fetching or predicting
+again, use `nifty.cmd forecast-report --from-report <report-folder>`; it checks
+the saved CSV hashes and does not overwrite an existing PDF. Report CSVs are
+ignored by Git and must be retained locally to rebuild a saved report. The command
+prints its output location. It may take considerable time and requires Yahoo
+access and matplotlib from `requirements-forecast.txt`. Each graph shows actual
+and predicted closes plus separate dashed linear trend fits over the displayed
+20 sessions. Those fitted lines are retrospective summaries, not additional
+predictions. Selected external and local factor names and their source
+identifiers appear below each graph; missing counts describe decision-row factor
+values. Selected stock factors and supported Indian index factors are extended
+with later Yahoo data where available. Yahoo ticker mappings and price scales
+are not verified against the saved source. Factor update status and errors are
+shown in the report, and values beyond the workflow's existing availability
+tolerance remain missing. BSE's daily model has no
+selected factors. If a stock lacks data or a completed model, it is listed as a
+failure in the output and the command exits nonzero; the PDF contains the
+successful stocks only. Generating this historical comparison does not retrain
+models or predict a future session.
+
+The training universe is the union of **61 verified Nifty 50 members** whose
+membership overlaps January 2022 through the available 2026 membership records
+(verified through October 13, 2026). A stock need not remain in the index
+throughout that period. For those stocks, all available candles from January
+2022 onward are eligible, including dates before joining or after leaving.
+Local stock-factor candidates use the same universe; saved global/economic
+factors remain available. Stocks that left before 2022, such as AUROPHARMA, are
+not training targets or local stock factors. No source files are deleted by
+this filtering. Local price history currently ends in January 2026; membership
+records do not create missing later prices.
+
+This is an explicitly retrospective research universe, **not** a point-in-time
+Nifty membership strategy. It can introduce universe-selection/survivorship
+bias. The original completed correlation scan retains its original membership
+policy; new training-period correlations are recalculated under this full-history
+policy. Other legacy workflows retain their original membership rules.
+The saved same-candle scan was subsequently filtered to the 61-stock universe:
+excluded stock targets and local-stock factors were removed, while retained
+correlations were not recomputed. Its checksums describe the filtered outputs;
+the original scan cannot be resumed. The older 2025 scan still contains
+unclassified local factors that may include nonmember stocks, indexes or ETFs.
+
+#### Auditing and reconstructing candle gaps
+
+Stop preparation/training before changing source candles. Audit all 61 stocks
+and nine training timeframes without modifying them:
+
+```bat
+python -m data_pipeline.nifty_candle_repair --report candle-audit.csv
+```
+
+Add `--apply` to write verified repairs. Only complete finer candles may form
+a coarser OHLCV bar, with exact, nonoverlapping interval coverage. Daily bars
+can supply 2d/weekly bars, but cannot supply real intraday prices. Missing
+one-minute candles remain missing. Existing complete bars are not overwritten;
+intentional session-end partial bars are not invented into complete bars.
+The session calendar is a RELIANCE-history proxy, not an official exchange
+calendar, and coverage is checked only within each stock's available history.
+Repaired rows leave stored indicator columns blank; training recalculates them.
+
+The original correlation scan remains a historical snapshot with verified
+output checksums. New preparation fingerprints the **current** source data
+and recomputes training-period correlations; it does not pretend the old scan
+used repaired inputs. An existing preparation/training checkpoint must not be
+resumed after changing its inputs; start a new run instead.
+
+Selection is independent for each stock/timeframe and uses **return**, not
+price-level, correlations. Both absolute Pearson and absolute Spearman must
+pass. Threshold pairs are `(0.70,0.70)`, `(0.69,0.65)`, `(0.68,0.60)`,
+`(0.67,0.55)`, `(0.66,0.50)`, `(0.65,0.45)`, then `(0.64,0.40)` through
+`(0.40,0.40)`.
+Relaxation stops at the first level admitting any factor; all qualifying
+factors at that level are retained, with their signed coefficients. No factor
+is invented below the floor. The default minimum is **60 paired returns**.
+Candidates include other surviving local Nifty stock histories plus the saved
+global and daily economic collections. Self-stock factors are excluded.
+Missing timeframes are not replaced with daily values.
+
+The full-history coefficients are **not** used to select factors for earlier
+training rows. Each job splits its eligible sessions chronologically at
+70%/85%, recalculates factor correlations strictly before its validation
+boundary (including availability), then freezes selection for validation and
+holdout. Labels spanning split boundaries are purged. Different historical
+members can therefore have different split dates. Missing histories, fewer
+than ten sessions, and jobs without complete sequences in every split are
+explicitly reported in `preparation-summary.json`; selecting 61 stocks does not
+mean all 549 stock/timeframe combinations can be trained.
+
+Every job uses the existing causal price/return, candle-shape, EMA, RSI, MACD,
+ATR, Bollinger, stochastic, volume and box indicators, plus the four executable
+strategy-family conditions: **box breakout, momentum, trend following, and
+mean reversion**. They are present both with and without factors. These are
+reusable feature/rule families, not proof that every catalog strategy is
+equivalent or profitable. Factor returns are joined backward by availability
+at the same timeframe, with missing-value flags and maximum ages (one candle
+intraday; 7/10/14 calendar days for daily/2d/weekly). Economic snapshots lack
+verified publication times; this research workflow assumes end of the following
+New York calendar day, which is an assumption, not a verified release schedule.
+
+Each usable stock/timeframe gets its own **XGBoost + LSTM** next-candle log-return
+model using the existing resumable trainer. Training defaults to **CUDA and two
+parallel worker processes**, each processing one independent stock/timeframe at
+a time. Windows uses the multiprocessing `spawn` start method so CUDA contexts,
+random seeds and checkpoints are isolated; full datasets are loaded inside
+workers, not copied through the task queue. Each worker limits PyTorch CPU
+threads to two. Preparation remains sequential.
+Validation chooses checkpoints and
+the blend, including pure-tree/pure-LSTM endpoints; no architecture is
+guaranteed superior before evaluation. Price is anchor close times the
+exponential of predicted log return; trend is **up/down/flat** from that same
+prediction, not a calibrated classification probability.
+
+Sequences do not cross missing/partial candles or intraday session boundaries.
+Their maximum length is 20, capped to 300 minutes' worth of bars intraday, ten
+bars for 2d and three for weekly so short sessions/holiday weeks remain usable.
+`evaluate` writes timestamped holdout price/trend predictions and per-job
+MAE/RMSE/MAPE/directional accuracy against a last-close persistence baseline.
+Never tune repeatedly against this reserved holdout. The baseline is not an
+execution backtest or a claim that the strategy features add predictive value.
+
+```bat
+nifty.cmd pause
+nifty.cmd resume
+nifty.cmd stop
+```
+
+Progress prints automatically in the running terminal: preparation stock,
+timeframe and factor counts; training active jobs, tree rounds, epochs and
+batch offsets about every 15 seconds, plus completed-job counts and times.
+There is no separate `status` command. The run's JSON checkpoints remain on disk
+for integrity and restart support.
+If Windows temporarily denies access to a worker's progress file, the terminal
+reports that the snapshot is unavailable and checks again on the next update.
+
+Pause/stop work during factor loading boundaries, between preparation jobs,
+at training batches/tree rounds, and between evaluation batches. Pause retains
+the Python process and its memory; stop exits after saving. `resume` releases a
+paused process; after exit/interruption rerun the original stage with
+`--resume`, for example `nifty.cmd train --research-only --resume`.
+Preparation restarts an incomplete stock/timeframe, reusing verified complete
+jobs. Training resumes its saved round/batch. Evaluation restarts its current
+stage without retraining. The combined command uses the same controls for
+both preparation and training, including the transition between them. A stop
+at the end of preparation prevents training from starting. Restart either
+interrupted stage with `nifty.cmd train --research-only --resume`.
+Preserve identical preparation scope and model/device options when
+resuming. All training workers observe the same run-level pause/stop request;
+on failure, the coordinator stops dispatching work and waits for other workers
+to checkpoint before returning the error. Training summaries include per-job
+elapsed times.
+
+Both CUDA-enabled PyTorch and CUDA-enabled XGBoost are checked before dispatch;
+there is no silent CPU fallback. On the 4 GiB RTX 3050 A, start with at most two
+GPU workers. They share the same GPU, so two workers are **not guaranteed to be
+twice as fast** and can still exhaust VRAM, especially while other applications
+use the GPU. Reduce concurrency, without changing model settings, if needed:
+
+```bat
+nifty.cmd train --research-only --device cuda --workers 2
+nifty.cmd train --research-only --device cuda --workers 1 --resume
+```
+
+Changing `--workers` is permitted on resume. An explicit `--device cpu` is
+available for a new CPU training run; changing the device of an existing
+training run is rejected to preserve checkpoint identity.
+Evaluation/prediction still default to CPU; pass `--device cuda` explicitly to
+accelerate those stages. Training dependencies are in `requirements-training.txt`.
+A smaller explicit preparation scope is supported,
+for example `nifty.cmd train --research-only --symbols INFY --timeframes 1d --run-dir data\models\infy-test`;
+pass that same run directory to subsequent stages.
+
+`predict` uses the latest eligible **prepared historical snapshot**, not live
+quotes or newly downloaded factors. Its output includes the actual as-of time.
+For intraday jobs the snapshot stops at the last anchor with a known eligible
+next complete candle; it never extrapolates an overnight move from an
+intraday-only model.
+Do not treat that forecast as current market data. Inputs/code/checkpoints are
+validated; changed source snapshots require a fresh preparation/run directory.
+Source rights, corporate-action adjustments, exchange calendars and economic
+publication times still require independent verification. Contemporaneous
+sector indexes may contain the target stock and do not establish forecasting
+skill or causality.
+
+CMD is used for the lightweight launcher, not to accelerate Python training.
+Microsoft documents [CMD](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cmd)
+as a command interpreter and [PowerShell](https://learn.microsoft.com/en-us/powershell/scripting/overview)
+as a broader automation environment; neither document establishes a universal
+idle-resource benchmark. A local no-profile, stdin-waiting check measured about
+6.8 MiB for CMD versus 63.5 MiB for Windows PowerShell, with zero measured CPU
+time over a two-second idle interval for both (terminal host excluded).
+This is machine-specific, not a universal performance guarantee.
+
+### Per-stock, next-candle correlations
+
+The following research command processes historical Nifty 50 members one stock
+at a time and writes `stocks\<symbol>.csv` under the output directory. Each
+file has a row for every factor and each of the nine stock timeframes. The
+correlation is Pearson's correlation between the latest available **daily**
+factor feature and the stock's next-candle log return; it does not calculate
+intraday factor features. The unfiltered correlation, paired-example count,
+status and absolute-0.49 indicator are recorded. The target stock's own local
+price is marked `target_stock_excluded`; missing or insufficient data and
+constant values are reported with a blank correlation rather than invented.
+
+The command uses all local daily candidates, both prepared global fund
+collections, and the saved India, Treasury, RBI-reference and oil snapshots.
+These snapshots must already exist at the paths below. The end date is exclusive
+and cannot exceed the 2025-01-01 snapshot cutoff. A first run requires a new
+output directory:
+
+```powershell
+Set-Location 'D:\stonks\Stockmog'
+$corrArgs = @(
+  '--membership', 'data\external\nse_index_membership_0786cd915974.csv',
+  '--stocks', 'data\stocks',
+  '--intraday', 'data\external\nifty_prepared_intraday',
+  '--daily', 'data\external\nifty_prepared_daily_source_v2',
+  '--multisession', 'data\external\nifty_prepared_daily_multisession',
+  '--global-factors', 'data\external\global_factor_research',
+  '--global-factors', 'data\external\nifty_extra_sector_factors',
+  '--india-audit', 'data\external\nifty_all_factors_india_2025',
+  '--treasury-audit', 'data\external\nifty_all_factors_treasury_2025',
+  '--prices-audit', 'data\external\nifty_all_factors_prices_2025',
+  '--output', 'data\external\nifty_candle_correlations_2025',
+  '--start', '2022-01-03', '--end', '2025-01-01'
+)
+python -m modeling.nifty_candle_correlations @corrArgs
+```
+
+In another PowerShell window, pause or stop using the standard control command:
+
+```powershell
+python main.py training-control pause --run-dir 'data\external\nifty_candle_correlations_2025'
+python main.py training-control resume --run-dir 'data\external\nifty_candle_correlations_2025'
+python main.py training-control stop --run-dir 'data\external\nifty_candle_correlations_2025'
+```
+
+Pause and stop are checked after factor loading and at timeframe and
+256-factor boundaries. An incomplete stock is restarted when resumed; completed
+stock files are checksum-verified and reused. After a stop or interruption,
+rerun with `python -m modeling.nifty_candle_correlations @corrArgs --resume`
+in the window where `$corrArgs` is defined. The default minimum is 60 paired
+candle examples; `--symbols RELIANCE` limits a new run to one historical member.
+Input fingerprints use file size and modification time, not full content hashes.
+
+Daily factor values can repeat across many intraday candles, so those paired
+examples are not independent. Source publication times, revisions, adjustments
+and data rights remain unverified; the India and global datasets have
+research-use restrictions. Multiple testing, overlapping proxies and the
+retrospective local catalog can distort correlations. The reported values are
+exploratory, not proof of prediction quality or a trained model.
+
+`modeling.nifty_price_model` provides research-only building blocks, not a
+fitted model. `load_prepared_candles` verifies each
+preparation checkpoint and enforces a caller-supplied row limit; process one
+stock at a time. `build_examples` makes next-session close-to-close log-return
+labels using consecutive RELIANCE-reference sessions, with both dates in the
+same stock membership interval. `build_forecast_features` constructs the same
+features without the future close; its caller must supply the actual next
+exchange session. Both use a decision at midnight after the source daily
+session and the latest available candle from each of the nine timeframes.
+Each candle contributes close relative to the daily anchor, body, range and
+partial status. These are latest-candle snapshots, not every intraday bar.
+Callers must specify maximum acceptable candle and factor ages; missing and
+stale observations remain NaN. Missing timeframes are returned explicitly.
+
+Factor return inputs must correspond exactly to a selection made before the
+earliest decision session. They must be constructed with verified,
+point-in-time availability using the audit's documented method; simply passing
+arbitrary returns is not verified by this API. Features named `factor_0_return`,
+etc. correspond to selected `(source, factor)` pairs sorted alphabetically.
+Local factor returns are used only for the matching decision session; an older
+local return is not carried forward. Global returns use the audit's backward
+availability and freshness rules.
+The existing selection has no qualifying factors; stock-only research requires
+an explicit `allow_no_factors=True`. An insufficient-observations status is not
+silently treated as no qualifying factor. Training must perform separate
+past-only selection for each chronological fold, fit all imputation and scaling
+on the relevant training partition only, and purge labels that cross boundaries.
+
+`build_price_tree` creates an untrained XGBoost log-return regressor;
+`build_price_lstm` creates an untrained LSTM log-return regressor using the
+existing hybrid model's two-layer architecture. `predict_hybrid_prices` combines
+outputs from fitted models with an explicitly chosen tree weight and converts
+the result to a positive price relative to the decision-session close. Its LSTM
+input must already be normalized using training-only statistics. No calibration,
+trained weights, forecast accuracy, live-data readiness or trading suitability
+is implied. Market-data rights, adjustments and timing assumptions remain
+unresolved.
+
+### Pooled price training and controls
+
+`modeling.nifty_price_training.prepare_price_dataset` pools explicitly supplied
+per-stock `build_examples` frames. It aligns qualified factors by source and
+name rather than treating different stocks' factor slots as equivalent. It
+requires a selection fixed before each stock's first example, builds LSTM
+sequences only across consecutive reference sessions within a membership
+interval, and purges targets whose dates or publication times cross the
+validation boundary. Holdout rows are reserved and never used for fitting or
+calibration. The caller must supply the prepared frames, their verified
+point-in-time factor returns, reference calendar, membership, and chronological
+split dates. The workflow below prepares and checkpoints those frames.
+
+`train_pooled_price_model` fits the tree and LSTM only when explicitly called,
+requires `research_only=True`, and learns a hybrid weight from validation
+returns. A no-factor stock must also be explicitly allowed during data assembly.
+It writes a run identity, progress state, one atomic checkpoint, trained
+artifacts and a final summary. Normalization uses training examples only; model
+artifacts carry feature order, selected-factor provenance and split boundaries.
+`load_price_predictor` verifies artifact hashes and feature order;
+`align_price_features` maps a stock's factor columns to the pooled schema.
+The workflow records candle-age policy and input provenance and reconstructs
+selected factor returns using their audit methods.
+
+Use the existing control commands with the training output directory:
+
+```powershell
+python main.py training-control pause --run-dir "data\models\price-research"
+python main.py training-control status --run-dir "data\models\price-research"
+python main.py training-control resume --run-dir "data\models\price-research"
+python main.py training-control stop --run-dir "data\models\price-research"
+```
+
+Pause and stop take effect after a tree round or LSTM batch; the checkpoint is
+saved first. After a stop or interruption, call `train_pooled_price_model` again
+with the identical reconstructed dataset, settings and dependency versions and
+`resume=True`. Changed data or settings are rejected. The prepared arrays are
+currently held in memory; rebuilding the in-memory pooled dataset after a stop
+restarts that assembly, although its already prepared candle files are preserved.
+Passing a `TrainingControl` to `prepare_price_dataset` enables pause or stop
+between stocks. `training-state.json` is progress information, not the recovery
+checkpoint. Do not run multiple trainers in the same directory.
+
+There is no performance estimate. A holdout report requires a trained model.
+None of the research-only data limitations is removed by training.
+
+### Price holdout evaluation
+
+After a research training run completes, call
+`modeling.nifty_price_evaluation.evaluate_holdout(dataset, model_dir, output)`,
+using the exact reconstructed `PriceDataset` used for training and a new output
+directory. It refuses changed data, model artifacts, feature order, or a
+nonmatching training summary. No fitting or calibration is performed. The
+dataset now retains actual target closes and stock/session identities; older
+programmatic datasets must be rebuilt.
+
+`holdout-predictions.csv` contains the stock, decision and target sessions,
+actual close, predicted close, last-close baseline and signed errors.
+`holdout-summary.json` reports sample counts, MAE, RMSE, MAPE and directional
+accuracy overall and per stock for both the model and baseline. The baseline
+predicts the next close will equal the last close. Stocks included in training
+but without holdout examples are listed separately. Aggregate rupee errors are
+sample-weighted across stocks with different price levels; directional accuracy
+counts an unchanged prediction as correct only when the actual close is also
+unchanged. These are historical source prices, not necessarily independently
+verified official or corporate-action-adjusted closes.
+
+Evaluation checks the model and data identity again before publishing the
+report. It writes batch checkpoints and supports the same pause and stop
+controls; after interruption, call it with the same arguments and `resume=True`.
+Repeated model decisions based on holdout results can invalidate it as an
+untouched test.
+
+### Research workflow commands and graphs
+
+These commands do **not** run automatically. The `prepare` command does not
+fit a model. Copy the full input data and this code before using another
+machine; existing preparation and audit manifests contain absolute paths, so
+recreate those preparations, audits and the selection on the new machine
+instead of assuming Windows checkpoints can resume unchanged in Colab.
+Keep paths and dependency versions unchanged when resuming.
+
+Install the base and training dependencies as described in the Colab section
+above, and install `requirements-forecast.txt` for graphing. The extra `hf` and
+`0` lines currently in `requirements.txt` prevent relying on that manifest
+unchanged.
+
+This is a **stock-only research pilot**, not the requested external-factor
+model: the current selection has no factors meeting |correlation| >= 0.7.
+The selected dates and age limits below are examples, not established optimal
+settings. They place all three splits inside the observed RELIANCE source
+coverage. Choose a new run directory and adapt dates, inputs and limits to
+actual coverage:
+
+```powershell
+python -m modeling.nifty_price_workflow prepare `
+  --run-dir "data\models\nifty-price-pilot" `
+  --membership "data\external\nse_index_membership_0786cd915974.csv" `
+  --selection "data\external\nifty_factor_selection_2025\selection.json" `
+  --reference "data\stocks\day\RELIANCE\1d.csv.gz" `
+  --intraday "data\external\nifty_prepared_intraday" `
+  --daily "data\external\nifty_prepared_daily_source_v2" `
+  --multisession "data\external\nifty_prepared_daily_multisession" `
+  --start 2025-01-01 --validation-start 2025-08-01 `
+  --holdout-start 2025-11-01 --end 2026-02-01 --symbols RELIANCE `
+  --intraday-age-hours 96 --daily-age-days 7 --multiday-age-days 14 `
+  --factor-age-days 5 --sequence-length 20 --max-rows 5000000 `
+  --allow-no-factors
+```
+
+End dates are exclusive; selection must precede the first example, and the
+three chronological splits must each contain complete sequences. This command
+loads one bounded stock/timeframe at a time, saves checksum-verified per-stock
+example checkpoints, and reconstructs the pooled arrays in memory. An omitted
+or unavailable timeframe fails unless `--allow-missing-timeframes` is explicit;
+its features are then missing, not invented. `--skip-unusable` explicitly
+omits stocks with insufficient selection observations, missing daily candles
+or no eligible examples. `preparation-summary.json` lists omissions, missing
+timeframes, selected factor counts and split sizes. Review it before training.
+For all historical selection symbols, PowerShell can construct the list:
+
+```powershell
+$symbols = (Get-Content "data\external\nifty_factor_selection_2025\selection.json" -Raw | ConvertFrom-Json).stocks.symbol
+```
+
+Replace `--symbols RELIANCE` with `--symbols $symbols --skip-unusable` in a
+new run, adding `--allow-missing-timeframes` only if those gaps are acceptable.
+This historical universe is not a claim that every member is in today's index.
+The command regenerates and checks the factor selection against its original
+audits. Qualified local and global factors use the audited return calculation;
+global factor age must equal the audit setting. Prepared candle parts are
+checksum-verified when first read; input file sizes and modification times,
+checkpoint hashes, source hashes and package versions are checked on resume.
+Source files with unchanged size and modification time are not independently
+rehashed on every resume.
+
+Pause, continue, stop and inspect **preparation** using its run directory:
+
+```powershell
+python main.py training-control pause --run-dir "data\models\nifty-price-pilot"
+python main.py training-control status --run-dir "data\models\nifty-price-pilot"
+python main.py training-control resume --run-dir "data\models\nifty-price-pilot"
+python main.py training-control stop --run-dir "data\models\nifty-price-pilot"
+```
+
+The request is observed between factors, timeframes or stocks, and during
+pooled assembly between stocks; a single large file operation is not
+interruptible. After stop or interruption rerun the identical prepare command
+with `--resume`. Completed stock checkpoints are reused; a partially processed
+stock and pooled in-memory assembly restart. A stopped workflow or report
+command prints a message to stderr and exits with status 2, not success.
+If dataset reconstruction stops before a training or evaluation directory has
+been created, continue the parent run control and rerun that command without
+`--resume`; use `--resume` only when that stage's directory already exists.
+Workflow source files are included in run identities, so changes to them
+require preparation in a new run directory rather than resuming an old one.
+
+**Only when you explicitly decide to train**, an example command is:
+
+```powershell
+python -m modeling.nifty_price_workflow train `
+  --run-dir "data\models\nifty-price-pilot" --research-only `
+  --tree-rounds 100 --epochs 20 --batch-size 32 --learning-rate 0.001 --device cpu
+```
+
+These parameters are examples, not a guarantee of accuracy, cost or runtime.
+Use `--device cuda` only with a working CUDA installation; TPU is not supported
+by this trainer. Training controls use the `model` subdirectory:
+`data\models\nifty-price-pilot\model`. After interruption repeat the identical
+training command with `--resume`; tree rounds and LSTM batches are checkpointed.
+Dataset reconstruction before training uses the parent run-directory controls.
+
+After completed training, evaluate and generate the graphs:
+
+```powershell
+python -m modeling.nifty_price_workflow evaluate `
+  --run-dir "data\models\nifty-price-pilot" --batch-size 256 --device cpu
+python -m modeling.nifty_price_report `
+  --evaluation "data\models\nifty-price-pilot\evaluation" `
+  --output "data\models\nifty-price-pilot\report"
+```
+
+Evaluation controls use the `evaluation` subdirectory and report controls use
+the `report` subdirectory; restart either identical command with `--resume`.
+The report contains `stock-graphs.pdf` with one graph per stock, separate PNGs
+under `graphs`, `stock-metrics.csv` and `report.json`. Each graph shows actual
+and AI forecast closes together for the holdout dates, not a future forecast.
+Baseline metrics are in the CSV and JSON. The report verifies the evaluation
+CSV hash and per-stock metrics. No report can be produced before evaluation.
+
 ## Closing-price trend baseline
 
 The separate `forecast_stock_prices.py` script plots the same five selected

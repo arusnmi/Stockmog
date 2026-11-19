@@ -34,11 +34,13 @@ def _replace_with_retry(
 class TrainingControl:
     """Coordinate pause, resume, and stop requests through a run-directory file."""
 
-    def __init__(self, run_dir: str | Path, *, poll_seconds: float = 1.0) -> None:
+    def __init__(self, run_dir: str | Path, *, poll_seconds: float = 1.0,
+                 acknowledge: bool = True) -> None:
         self.run_dir = Path(run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.path = self.run_dir / "control.json"
         self.poll_seconds = poll_seconds
+        self.acknowledge = acknowledge
 
     def action(self) -> str:
         if not self.path.exists():
@@ -77,11 +79,11 @@ class TrainingControl:
     def checkpoint_boundary(self, save_checkpoint: Callable[[], None]) -> bool:
         """Save before pausing/stopping; return false when training should stop."""
         action = self.action()
-        if action == "stop":
+        if action in {"stop", "stopped"}:
             save_checkpoint()
             self._write_status("stopped")
             return False
-        if action != "pause":
+        if action not in {"pause", "paused"}:
             return True
 
         save_checkpoint()
@@ -90,13 +92,16 @@ class TrainingControl:
             action = self.action()
             if action == "continue":
                 return True
-            if action == "stop":
+            if action in {"stop", "stopped"}:
                 save_checkpoint()
                 self._write_status("stopped")
                 return False
             time.sleep(self.poll_seconds)
 
     def _write_status(self, action: str) -> None:
+        # Parallel workers observe requests; only their coordinator acknowledges them.
+        if not self.acknowledge:
+            return
         temporary = _temporary_path(self.path)
         temporary.write_text(
             json.dumps({"action": action}, indent=2) + "\n",

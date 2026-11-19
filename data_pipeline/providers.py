@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+import pandas as pd
+
 
 class MarketDataProvider:
     """Abstract interface for any data source connected to the trading system."""
@@ -36,6 +38,12 @@ class YahooFinanceProvider(MarketDataProvider):
 
         if df is None or df.empty:
             raise ValueError(f"No data returned for symbol {ticker} with interval {interval}.")
+        if isinstance(df.columns, pd.MultiIndex):
+            ticker_levels = [level for level in range(df.columns.nlevels)
+                             if ticker in df.columns.get_level_values(level)]
+            if len(ticker_levels) != 1:
+                raise ValueError(f"Cannot identify Yahoo Finance columns for {ticker}.")
+            df = df.xs(ticker, axis=1, level=ticker_levels[0])
 
         records: list[dict[str, Any]] = []
         for index, row in df.iterrows():
