@@ -1220,6 +1220,10 @@ is a single-symbol, single-fold Gymnasium adapter.
 
 ## PPO agent training
 
+For the newer stock/timeframe external-factor price models, use the separate
+[phase-2 Colab workflow](rl-colab.md). The strategy-outcome-score workflow below
+is unchanged and does not directly consume those price forecasts.
+
 The optional RL requirements install `sb3-contrib`'s `MaskablePPO`, which uses
 the environment's `action_masks()` so invalid position transitions are not
 sampled. `train-rl-agent` creates one policy for each available timeframe and
