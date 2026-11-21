@@ -1,4 +1,6 @@
 data/
+google_colab/*.tar
+google_colab/*.sha256.json
 *.csv
 *.parquet
 *.jsonl

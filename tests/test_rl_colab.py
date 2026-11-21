@@ -139,7 +139,7 @@ class NewsStreamTests(unittest.TestCase):
         self.assertEqual(list(result), EVENT_COLUMNS)
 
     def test_notebook_code_cells_compile(self):
-        path = Path(__file__).resolve().parents[1] / "notebooks" / "phase2_ppo_colab.ipynb"
+        path = Path(__file__).resolve().parents[1] / "google_colab" / "phase2_ppo_colab.ipynb"
         notebook = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(notebook["nbformat"], 4)
         for index, cell in enumerate(notebook["cells"]):
@@ -149,7 +149,7 @@ class NewsStreamTests(unittest.TestCase):
     def test_notebook_benchmark_uses_fresh_runs_and_checks_speed_target(self):
         from types import SimpleNamespace
 
-        path = Path(__file__).resolve().parents[1] / "notebooks" / "phase2_ppo_colab.ipynb"
+        path = Path(__file__).resolve().parents[1] / "google_colab" / "phase2_ppo_colab.ipynb"
         notebook = json.loads(path.read_text(encoding="utf-8"))
         cell = next(cell for cell in notebook["cells"] if cell["id"] == "benchmark")
         code = compile("".join(cell["source"]), "benchmark-cell", "exec")

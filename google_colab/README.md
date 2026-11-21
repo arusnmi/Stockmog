@@ -1,8 +1,36 @@
 # Phase 2: independent stock/timeframe PPO policies
 
-Open [the Colab notebook](../notebooks/phase2_ppo_colab.ipynb). This is an
+Open [the Colab notebook](phase2_ppo_colab.ipynb). This is an
 offline research workflow, not live brokerage execution or a profitability
 guarantee. Nothing is uploaded automatically.
+
+## Run in Google Colab
+
+This top-level folder contains everything you need to upload:
+
+- `phase2_ppo_colab.ipynb`: upload this notebook to Colab.
+- `ppo-dataset-top4.tar` and `ppo-dataset-top4.sha256.json`: upload both to
+  Google Drive under `MyDrive/Stockmog`. The notebook uses this four-stock
+  archive by default.
+- `ppo-dataset.tar` and `ppo-dataset.sha256.json`: optional full-universe
+  alternative; set `USE_TOP_PROFIT_ARCHIVE = False` to use it.
+
+The archives contain the Python source, dependency requirements, frozen
+trend-analyser models, history, news and research. You do not need to upload
+individual Python modules or install the repository separately.
+Archives and their checksums are local, git-ignored files, not GitHub downloads.
+The reusable source modules, tests and unpacked export data remain in their
+original repository locations.
+
+1. Upload the matching archive/checksum pair to Drive and the notebook to Colab.
+2. Select a GPU under **Runtime > Change runtime type** (A100 if available).
+3. Run the setup cells and review the printed news/research coverage. Then set
+   `ALLOW_PARTIAL_NEWS = True` and `ALLOW_PARTIAL_RESEARCH = True` in the
+   settings cell and rerun it.
+4. Run the benchmark. When satisfied, set `RUN_FULL_TRAINING = True` and run
+   the training cell.
+5. Enable `RUN_FINAL_TEST` only after fixing the training design. Outputs and
+   per-job checkpoints are saved to Drive.
 
 ## Local preparation
 
@@ -31,6 +59,10 @@ virtual environments, training caches or unrelated model runs are included.
 The archive is private research data, not a redistribution license.
 The unpacked directory is retained locally. A new export requires a new output
 path; incomplete exports are not silently accepted.
+After generating or refreshing an archive, move its `.tar` and `.sha256.json`
+from `data/colab` into this folder, replacing the matching old upload files.
+The exporter still uses the unpacked directories under `data/colab` to refresh
+research without rebuilding stock histories.
 
 ### Top-profit archive (trend-analyser picks only)
 
