@@ -202,8 +202,8 @@ def predictor_stream(frame: pd.DataFrame, meta: dict, model_path: Path) -> np.nd
     return values
 
 
-def prepare_job(bundle: Path, manifest: dict, job: dict, *, allow_partial_news: bool = False,
-                allow_partial_research: bool = False):
+def prepare_job_features(bundle: Path, manifest: dict, job: dict, *, allow_partial_news: bool = False,
+                         allow_partial_research: bool = False):
     if not manifest["news_complete"] and not allow_partial_news:
         raise ValueError("News coverage is incomplete. Explicitly acknowledge with --allow-partial-news.")
     has_research = "research.parquet" in manifest["files"]
@@ -247,6 +247,13 @@ def prepare_job(bundle: Path, manifest: dict, job: dict, *, allow_partial_news: 
     features = pd.concat(parts, axis=1)
     eligible = (frame["available_at"] >= pd.Timestamp(meta["predictor_frozen_at"]))
     frame, features = frame.loc[eligible].reset_index(drop=True), features.loc[eligible].reset_index(drop=True)
+    return frame, features
+
+
+def prepare_job(bundle: Path, manifest: dict, job: dict, *, allow_partial_news: bool = False,
+                allow_partial_research: bool = False):
+    frame, features = prepare_job_features(bundle, manifest, job, allow_partial_news=allow_partial_news,
+                                           allow_partial_research=allow_partial_research)
     splits = temporal_splits(frame)
     values = features.to_numpy(dtype=np.float32)
     if np.isinf(values).any():

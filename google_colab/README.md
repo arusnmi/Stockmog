@@ -1,19 +1,67 @@
-# Phase 2: independent stock/timeframe PPO policies
+# Phase 2: PPO training
 
-Open [the Colab notebook](phase2_ppo_colab.ipynb). This is an
-offline research workflow, not live brokerage execution or a profitability
-guarantee. Nothing is uploaded automatically.
+## Shared Rs 50,000 portfolio
+
+For one portfolio across all four stocks, use
+[the shared-portfolio notebook](phase2_ppo_portfolio_colab.ipynb) and upload
+`ppo-portfolio-top4.tar` and `ppo-portfolio-top4.sha256.json` to
+`MyDrive/Stockmog`. The independent-account trainer remains available in the
+repository, but its checkpoints are not interchangeable with this workflow.
+
+The shared workflow trains one PPO policy on common 1-minute decisions, using
+all nine timeframes' features and frozen price predictions. It has one Rs
+50,000 cash balance and can hold multiple stocks. For each decision, orders
+execute at the first later common candle open allowed by the decision time.
+Sales execute first; available cash is divided equally between the stocks
+selected for purchase. The whole-share constraint can leave unused cash.
+There is no leverage or pyramiding, and the original 10% per-position cap does
+not apply. Missing common minutes are skipped; this is a simplified simulator,
+not exchange-grade execution.
+
+The action mask uses the latest observed closes, estimated fees and slippage,
+and estimated proceeds from simultaneous sales to rule out purchases whose
+equal cash budgets cannot afford one share. Actual orders still fill at a
+later open; a price gap can therefore cause a rejection, which incurs a
+one-step reward penalty. This affordability rule does not look at future opens.
+Changing it requires a fresh portfolio training output, not old checkpoints.
+The current upload archive predates this fix. The notebook's affordability-fix
+cell patches that exact archive version in memory after source verification;
+run it on every new runtime before benchmarking, training or testing. It does
+not modify the archive. Use the new affordability-specific output directory.
+
+News and research stay in their separate bounded policy branches. The policy
+is trained, validated and tested on chronological shared-portfolio sessions,
+with train-only normalization. The final report compares the policy with cash
+and an equal-budget buy-and-hold portfolio. Four simulated environments used
+for PPO training are independent *copies* of this one-portfolio simulation;
+they are not combined into a larger account.
+
+The shared-portfolio benchmark and full run use **one** policy, with 262,144
+steps by default. Its steps are more computationally expensive than the old
+single-stock steps and the old benchmark is not a valid speed estimate. The
+benchmark is a rough projection and includes predictor preparation and
+validation overhead. Existing stock-selection bias, partial data and limited
+post-freeze history still apply.
+
+To refresh the portfolio archive after adding research, from the repository
+root run:
+
+```powershell
+python -m data_pipeline.rl_colab_data --output data\colab\ppo-dataset-top4 --research data\colab\research --attach-research --archive google_colab\ppo-portfolio-top4.tar
+```
+
+Repackaging includes the updated source, so remove the legacy affordability-fix
+cell after verifying the new source is present in the archive. Upload both
+regenerated files and use a fresh Colab `WORK` and output directory for a new
+training run.
 
 ## Run in Google Colab
 
 This top-level folder contains everything you need to upload:
 
-- `phase2_ppo_colab.ipynb`: upload this notebook to Colab.
-- `ppo-dataset-top4.tar` and `ppo-dataset-top4.sha256.json`: upload both to
-  Google Drive under `MyDrive/Stockmog`. The notebook uses this four-stock
-  archive by default.
-- `ppo-dataset.tar` and `ppo-dataset.sha256.json`: optional full-universe
-  alternative; set `USE_TOP_PROFIT_ARCHIVE = False` to use it.
+- `phase2_ppo_portfolio_colab.ipynb`: upload this notebook to Colab.
+- `ppo-portfolio-top4.tar` and `ppo-portfolio-top4.sha256.json`: upload both
+  to Google Drive under `MyDrive/Stockmog`.
 
 The archives contain the Python source, dependency requirements, frozen
 trend-analyser models, history, news and research. You do not need to upload
@@ -30,7 +78,13 @@ original repository locations.
 4. Run the benchmark. When satisfied, set `RUN_FULL_TRAINING = True` and run
    the training cell.
 5. Enable `RUN_FINAL_TEST` only after fixing the training design. Outputs and
-   per-job checkpoints are saved to Drive.
+   portfolio checkpoints are saved to Drive.
+
+## Independent-account workflow
+
+The legacy independent stock/timeframe trainer remains in the source tree.
+The following background and local export instructions describe that trainer;
+its standalone Colab notebook and upload archives have been removed.
 
 ## Local preparation
 
@@ -52,16 +106,13 @@ printed and recorded. A DOC failure does not invalidate available GKG records,
 but the report remains explicitly partial.
 
 The export produces `data/colab/ppo-dataset.tar` and
-`data/colab/ppo-dataset.sha256.json`. Upload both manually to your own
-`MyDrive/Stockmog` folder. Data, source, frozen predictor weights, selected
+`data/colab/ppo-dataset.sha256.json`. Data, source, frozen predictor weights, selected
 factor histories, outcomes and coverage metadata are included. No credentials,
 virtual environments, training caches or unrelated model runs are included.
 The archive is private research data, not a redistribution license.
 The unpacked directory is retained locally. A new export requires a new output
 path; incomplete exports are not silently accepted.
-After generating or refreshing an archive, move its `.tar` and `.sha256.json`
-from `data/colab` into this folder, replacing the matching old upload files.
-The exporter still uses the unpacked directories under `data/colab` to refresh
+The exporter uses the unpacked directories under `data/colab` to refresh
 research without rebuilding stock histories.
 
 ### Top-profit archive (trend-analyser picks only)
@@ -76,9 +127,9 @@ python -m data_pipeline.rl_colab_data --output data/colab/ppo-dataset-top4 --res
 ```
 
 This produces `ppo-dataset-top4.tar` (36 jobs, about 0.31 GiB) and its
-`.sha256.json` sidecar. The notebook uses it by default
-(`USE_TOP_PROFIT_ARCHIVE = True`). Choosing stocks from previously examined
-profit results is selection bias; treat test results as optimistic.
+`.sha256.json` sidecar locally. Use the shared-portfolio refresh command above
+to package the data for the portfolio notebook. Choosing stocks from previously
+examined profit results is selection bias; treat test results as optimistic.
 
 ## Inputs and causal boundaries
 
@@ -227,7 +278,6 @@ profits**. Set `NEWS_LOGIT_LIMIT = 0` in the notebook to disable the branch's
 direct effect. Rewards, fills and costs are unchanged and never depend on news
 sentiment. Changed actions can still affect later positions and outcomes.
 
-The notebook uses `ppo-policies-low-news` for full-training checkpoints.
 Old unconstrained-policy checkpoints must not be resumed as this architecture;
 the changed archive/config identity requires fresh training.
 
@@ -265,14 +315,9 @@ from a GPU, but lightweight sequential rollouts can still be CPU-bound.
 An A100 is not automatically the best CU-per-trained-policy choice.
 Keep CPU preprocessing separate from paid GPU experiments where practical.
 
-The notebook's benchmark cell defaults to CUDA for an A100 pilot. Keep
-`RUN_FULL_TRAINING = False`, review the news coverage, and run fresh `1m` and
-`1d` pilots. It reports per-job and combined throughput, checks the
-500-steps/sec target, and projects active time and CU use for the selected jobs.
-Set `CU_PER_HOUR` to the rate shown by Colab, or leave it unset if unknown.
-Change `DEVICE` to `cpu` to compare with the same pilot settings. Pilot
-checkpoints are temporary and do not touch full-training checkpoints.
-No Colab benchmark has been run here. As a *planning scenario only*, 142 million
+The shared-portfolio notebook includes a separate benchmark; its results do
+not directly predict the speed of independent-account jobs. As a historical
+*planning scenario only*, 142 million
 transitions at 250–1,500 end-to-end transitions/second is about **26–158 hours**,
 plus archive transfer, preprocessing, predictor inference and interruptions.
 This range is not a measured Colab estimate or a promise of convergence.

@@ -120,7 +120,8 @@ def build_archive(run: Path, news: Path, output: Path, *, repo: Path,
 
 
 def package_archive(output: Path, *, repo: Path, jobs: list[dict],
-                    skipped: list[dict], coverage: dict) -> Path:
+                    skipped: list[dict], coverage: dict,
+                    archive_path: Path | None = None) -> Path:
     """Package generated history and current source; can refresh this task's archive."""
     if not (output / "export-state.json").is_file():
         raise ValueError("Only an existing generated export can be packaged")
@@ -132,6 +133,9 @@ def package_archive(output: Path, *, repo: Path, jobs: list[dict],
                 shutil.copyfile(source, target)
     for name in ("requirements.txt", "requirements-training.txt", "requirements-rl.txt"):
         shutil.copyfile(repo / name, output / "source" / name)
+    catalog = Path("docs") / "strategy-catalog.csv"
+    (output / "source" / catalog.parent).mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(repo / catalog, output / "source" / catalog)
     files = {path.relative_to(output).as_posix(): sha256(path)
              for path in sorted(output.rglob("*"))
              if path.is_file() and path.name not in {"export-state.json", "manifest.json"}}
@@ -154,7 +158,9 @@ def package_archive(output: Path, *, repo: Path, jobs: list[dict],
     }
     save_json(output / "manifest.json", manifest)
     save_json(output / "export-state.json", {"status": "complete", "jobs": len(jobs)})
-    archive_path = output.with_suffix(".tar")
+    archive_path = archive_path or output.with_suffix(".tar")
+    if archive_path.suffix != ".tar":
+        raise ValueError(f"Archive path must end in .tar: {archive_path}")
     with tarfile.open(archive_path.with_suffix(".tar.tmp"), "w") as archive:
         archive.add(output, arcname="stockmog-ppo")
     archive_path.with_suffix(".tar.tmp").replace(archive_path)
@@ -183,7 +189,8 @@ def research_manifest(output: Path) -> dict:
             "research_status": coverage["status"], "research_symbols": coverage["symbols"]}
 
 
-def attach_research(output: Path, research: Path, *, repo: Path) -> Path:
+def attach_research(output: Path, research: Path, *, repo: Path,
+                    archive_path: Path | None = None) -> Path:
     """Add or refresh the research stream in an existing export without re-exporting jobs."""
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
     for name in ("news.parquet", *[job["folder"] + "/history.parquet" for job in manifest["jobs"]]):
@@ -192,7 +199,8 @@ def attach_research(output: Path, research: Path, *, repo: Path) -> Path:
     copy_research(research, output)
     coverage = json.loads((output / "news-coverage.json").read_text(encoding="utf-8"))
     return package_archive(output, repo=repo, jobs=manifest["jobs"],
-                           skipped=manifest["source_skipped_jobs"], coverage=coverage)
+                           skipped=manifest["source_skipped_jobs"], coverage=coverage,
+                           archive_path=archive_path)
 
 
 if __name__ == "__main__":
@@ -204,12 +212,16 @@ if __name__ == "__main__":
     parser.add_argument("--research", type=Path, help="Research stream folder (data/colab/research)")
     parser.add_argument("--attach-research", action="store_true",
                         help="Add --research to the existing --output export and repackage")
+    parser.add_argument("--archive", type=Path,
+                        help="Destination .tar path when repackaging with --attach-research")
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
     if args.attach_research:
         if args.research is None:
             parser.error("--attach-research needs --research")
-        attach_research(args.output, args.research, repo=repo)
+        attach_research(args.output, args.research, repo=repo, archive_path=args.archive)
     else:
+        if args.archive is not None:
+            parser.error("--archive requires --attach-research")
         build_archive(args.run, args.news, args.output, repo=repo, symbols=args.symbols,
                       research=args.research)

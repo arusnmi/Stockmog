@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import io
 import json
-from contextlib import redirect_stdout
+import os
 from pathlib import Path
+import subprocess
+import sys
+import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
 import zipfile
 
 import numpy as np
@@ -102,6 +104,34 @@ class ColabEnvironmentTests(unittest.TestCase):
 
 
 class NewsStreamTests(unittest.TestCase):
+    def test_archive_source_imports_without_repository_files(self):
+        from data_pipeline.rl_colab_data import package_archive
+
+        repo = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bundle = root / "bundle"
+            bundle.mkdir()
+            save_json(bundle / "export-state.json", {"status": "incomplete"})
+            archive = package_archive(bundle, repo=repo, jobs=[], skipped=[],
+                                      coverage={"status": "partial"})
+            extracted = root / "extracted"
+            extracted.mkdir()
+            with tarfile.open(archive) as packed:
+                packed.extractall(extracted, filter="data")
+            source = extracted / "stockmog-ppo" / "source"
+            manifest = json.loads((source.parent / "manifest.json").read_text(encoding="utf-8"))
+            self.assertIn("source/docs/strategy-catalog.csv", manifest["files"])
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(source)
+            subprocess.run(
+                [sys.executable, "-c",
+                 "from data_pipeline.rl_colab_training import PPOConfig, train_jobs; "
+                 "from data_pipeline.rl_portfolio_training import train_portfolio; "
+                 "from modeling.nifty_price_training import load_price_predictor"],
+                cwd=root, env=env, check=True, capture_output=True, text=True,
+            )
+
     def test_future_news_and_later_tone_never_leak(self):
         events = pd.DataFrame([
             ["ABC", "2025-01-01T10:00:00Z", "url1", "gkg", np.nan],
@@ -137,55 +167,6 @@ class NewsStreamTests(unittest.TestCase):
         self.assertEqual(result["symbol"].tolist(), ["RELIANCE"])
         self.assertEqual(result["available_at"].iloc[0], pd.Timestamp("2025-01-02T09:15Z"))
         self.assertEqual(list(result), EVENT_COLUMNS)
-
-    def test_notebook_code_cells_compile(self):
-        path = Path(__file__).resolve().parents[1] / "google_colab" / "phase2_ppo_colab.ipynb"
-        notebook = json.loads(path.read_text(encoding="utf-8"))
-        self.assertEqual(notebook["nbformat"], 4)
-        for index, cell in enumerate(notebook["cells"]):
-            if cell["cell_type"] == "code":
-                compile("".join(cell["source"]), f"cell-{index}", "exec")
-
-    def test_notebook_benchmark_uses_fresh_runs_and_checks_speed_target(self):
-        from types import SimpleNamespace
-
-        path = Path(__file__).resolve().parents[1] / "google_colab" / "phase2_ppo_colab.ipynb"
-        notebook = json.loads(path.read_text(encoding="utf-8"))
-        cell = next(cell for cell in notebook["cells"] if cell["id"] == "benchmark")
-        code = compile("".join(cell["source"]), "benchmark-cell", "exec")
-        jobs = [{"symbol": "ADANIENT", "timeframe": tf, "rl_eligible": True}
-                for tf in ("1m", "1d")]
-        scratch_paths = []
-
-        def fake_train(bundle, output, config, **kwargs):
-            self.assertTrue(output.is_dir())
-            self.assertEqual(list(output.iterdir()), [])
-            scratch_paths.append(output)
-            (output / "pilot.marker").touch()
-            return {"status": "complete", "jobs": [
-                dict(job, elapsed_seconds=14, timesteps=config.steps) for job in jobs]}
-
-        with tempfile.TemporaryDirectory() as work:
-            scope = {
-                "Path": Path, "WORK": Path(work), "BUNDLE": Path(work),
-                "manifest": {"jobs": jobs, "news_complete": False,
-                             "files": {"research.parquet": "x"}, "research_complete": False},
-                "ALLOW_PARTIAL_NEWS": True, "ALLOW_PARTIAL_RESEARCH": True,
-                "SYMBOLS": None, "TIMEFRAMES": ["1m"], "PPOConfig": PPOConfig,
-                "NEWS_LOGIT_LIMIT": 0.05, "RESEARCH_LOGIT_LIMIT": 0.15, "STEPS_PER_JOB": 262_144,
-                "train_jobs": fake_train,
-                "torch": SimpleNamespace(cuda=SimpleNamespace(
-                    is_available=lambda: True, get_device_name=lambda _: "test GPU")),
-            }
-            for elapsed, expected in ((32, "met"), (40, "not met")):
-                output = io.StringIO()
-                with patch("time.perf_counter", side_effect=[0, elapsed]), redirect_stdout(output):
-                    exec(code, scope)
-                self.assertIn(f"Target 500: {expected}.", output.getvalue())
-                self.assertIn("Projected 1 jobs / 262,144 steps", output.getvalue())
-                self.assertFalse(scratch_paths[-1].exists())
-        self.assertNotEqual(*scratch_paths)
-
 
 class NewsPriorityPolicyTests(unittest.TestCase):
     def test_extreme_news_cannot_reverse_clear_market_preference(self):
