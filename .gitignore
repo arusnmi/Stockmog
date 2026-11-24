@@ -1,6 +1,11 @@
 data/
 google_colab/*.tar
 google_colab/*.sha256.json
+google_colab/combined-historical-top4-20261124.zip
+google_colab/daily-historical-top4-20261124.zip
+google_colab/walkforward-training-inputs-20261124.zip
+/walkforward-training-20261124-v1-20261124T075608Z-1-001.zip
+/walkforward-training-20261124-v1-20261124T075608Z-1-001/
 *.csv
 *.parquet
 *.jsonl
